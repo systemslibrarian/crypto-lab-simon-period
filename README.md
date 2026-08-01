@@ -2,9 +2,9 @@
 
 ## What It Is
 
-**Simon's algorithm** (Daniel Simon, FOCS 1994 / SICOMP 1997) finds the hidden period of a black-box function using exponentially fewer queries than any classical algorithm can. Given `f` with the promise that `f(x) = f(y)` exactly when `y = x ⊕ s`, it recovers the `n`-bit secret `s` in **O(n)** quantum queries where the best classical attack needs **Θ(2^(n/2))**. It was the first proven exponential quantum separation for a decision-style problem, and the direct inspiration for Shor's algorithm the following year.
+**Simon's algorithm** (Daniel Simon, FOCS 1994 / SICOMP 1997) finds the hidden period of a black-box function using exponentially fewer queries than any classical algorithm can. Given `f` with the promise that `f(x) = f(y)` exactly when `y = x ⊕ s`, it recovers the `n`-bit secret `s` in **O(n)** quantum queries where the best classical attack needs **Θ(2^(n/2))**. It was the first proven exponential quantum separation for a decision-style problem, and the direct inspiration for Shor's algorithm, presented at the same conference (Simon at FOCS 1994 pp. 116–123, Shor immediately after at pp. 124–134).
 
-It is also, since 2010, a working attack on symmetric cryptography. **Kuwakado and Morii (ISIT 2012)** observed that the Even-Mansour cipher `E(x) = P(x ⊕ k₁) ⊕ k₂` — provably secure to 2^(n/2) classical queries — makes `f(x) = E(x) ⊕ P(x)` periodic with period `k₁`, so the whitening key *is* a hidden period. **Kaplan, Leurent, Leverrier and Naya-Plasencia (CRYPTO 2016)** turned the same observation into forgeries against CBC-MAC, PMAC, GMAC, OCB and GCM. This is the quantum threat to symmetric crypto that Grover does not describe, and the one that doubling the key length does nothing about.
+It is also, since 2010, a working attack on symmetric cryptography. **Kuwakado and Morii (ISITA 2012)** observed that the Even-Mansour cipher `E(x) = P(x ⊕ k₁) ⊕ k₂` — provably secure to 2^(n/2) classical queries — makes `f(x) = E(x) ⊕ P(x)` periodic with period `k₁`, so the whitening key *is* a hidden period. **Kaplan, Leurent, Leverrier and Naya-Plasencia (CRYPTO 2016)** turned the same observation into forgeries against CBC-MAC, PMAC, GMAC, OCB and GCM. This is the quantum threat to symmetric crypto that Grover does not describe, and the one that doubling the key length does nothing about.
 
 This demo runs the algorithm as an **exact statevector simulation**: real amplitudes, a real `H⊗ⁿ`, a real unitary XOR oracle, and 2^(n+m) numbers in a typed array. It could have sampled from the algorithm's known output distribution in one line, and that would have been a lie — the constructions attacked here do not satisfy Simon's promise exactly, and only an amplitude-level simulation reproduces what actually happens to them. Two of the four targets are real constructions with real consequences: the recovered Even-Mansour key is used to predict a fresh ciphertext, and the recovered CBC-MAC period is used to forge a tag on a message that was never queried, both checked against the real construction.
 
@@ -80,9 +80,9 @@ npm run dev
 | KAT | Source | File |
 | --- | --- | --- |
 | Simon's measurement distribution is exactly uniform over `s⊥` and exactly zero elsewhere — checked for every `n` from 2 to 6 and every one of the 2ⁿ−1 possible periods | Simon, *On the Power of Quantum Computation*, SICOMP 1997, §4 | `src/quantum/simon.test.ts` |
-| The post-Hadamard amplitude equals `(−1)^(x₀·y)(1 + (−1)^(s·y)) / √(2^(n+1))`, term for term | standard derivation (Nielsen & Chuang §6.5) | `src/quantum/simon.test.ts` |
+| The post-Hadamard amplitude equals `(−1)^(x₀·y)(1 + (−1)^(s·y)) / √(2^(n+1))`, term for term | standard derivation (Nielsen & Chuang, *Quantum Computation and Quantum Information*) | `src/quantum/simon.test.ts` |
 | Deferred measurement: reading the output register does not change the input-register distribution | deferred-measurement principle | `src/quantum/simon.test.ts` |
-| `f(x) = E(x) ⊕ P(x)` has period exactly `k₁`, over the whole domain, for every width and key | Kuwakado & Morii, ISIT 2012 | `src/crypto/targets.test.ts` |
+| `f(x) = E(x) ⊕ P(x)` has period exactly `k₁`, over the whole domain, for every width and key | Kuwakado & Morii, ISITA 2012 | `src/crypto/targets.test.ts` |
 | CBC-MAC's `f(b, m) = MAC(α_b ‖ m)` has the affine period `(1 ‖ Eₖ(α₀) ⊕ Eₖ(α₁))`, and is exactly 2-to-1 | Kaplan, Leurent, Leverrier & Naya-Plasencia, CRYPTO 2016 | `src/crypto/targets.test.ts` |
 | Classical period finding costs `√(π/2 · 2^(n−1))` queries — the birthday bound, measured over 400 runs | birthday bound | `src/classical/race.test.ts` |
 

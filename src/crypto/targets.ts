@@ -168,7 +168,7 @@ export async function makeEvenMansourTarget(n: number): Promise<Target> {
     id: 'even-mansour',
     name: 'Even-Mansour',
     tagline: 'E(x) = P(x ⊕ k₁) ⊕ k₂ — the minimal block cipher, period k₁.',
-    source: 'Kuwakado & Morii, ISIT 2012',
+    source: 'Kuwakado & Morii, ISITA 2012',
     n,
     m: n,
     table,
