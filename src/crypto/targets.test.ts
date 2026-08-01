@@ -60,6 +60,25 @@ describe('KAT — Kuwakado & Morii 2012: Even-Mansour’s period is the whitenin
     }
   });
 
+  it('never claims to predict the one block it already spent a classical query on', async () => {
+    // k₂ is derived from E(0), so block 0 is queried, not predicted. The
+    // challenge used to be (k₁ ^ 0b1011) unconditionally, which lands on 0
+    // whenever k₁ = 0b1011 — one key in fifteen at n = 4. Exhaustive over every
+    // possible k₁ at n = 4, then sampled at 5 and 6.
+    for (let n = 4; n <= 6; n++) {
+      const zero = '0'.repeat(n);
+      for (let trial = 0; trial < (n === 4 ? 60 : 20); trial++) {
+        const t = await makeEvenMansourTarget(n);
+        const res = t.exploit(t.truePeriod!);
+        expect(res.ok).toBe(true);
+        for (const row of res.rows) {
+          expect(row.label).not.toBe(`predicted E(${zero})`);
+          expect(row.label).not.toBe(`real E(${zero})`);
+        }
+      }
+    }
+  });
+
   it('a wrong period does not yield the key — the exploit fails closed', async () => {
     const t = await makeEvenMansourTarget(5);
     const wrong = (t.truePeriod! ^ 0b00001) & 31;

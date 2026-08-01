@@ -184,8 +184,13 @@ export async function makeEvenMansourTarget(n: number): Promise<Target> {
     exploit(period) {
       // k₂ = E(0) ⊕ P(0 ⊕ k₁): one classical query, no search.
       const k2Guess = encrypt(0) ^ applyPerm(P, period);
-      // Predict a block the attack has never encrypted, and check it.
-      const challenge = (period ^ 0b1011) & (size - 1);
+      // Predict a block the attack has never encrypted, and check it. Block 0
+      // is the one classical query already spent above, so it must not be the
+      // challenge — and (period ^ 0b1011) lands on 0 whenever the period
+      // happens to be 0b1011, which at n = 4 is one key in fifteen.
+      const spentOnKeyDerivation = 0;
+      let challenge = (period ^ 0b1011) & (size - 1);
+      if (challenge === spentOnKeyDerivation) challenge = (challenge + 1) & (size - 1);
       const predicted = applyPerm(P, challenge ^ period) ^ k2Guess;
       const actual = encrypt(challenge);
       const ok = predicted === actual;

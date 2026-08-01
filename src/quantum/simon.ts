@@ -111,10 +111,18 @@ export function simonDistribution(table: Uint32Array, n: number, m: number): Flo
 }
 
 /**
- * Every y the algorithm can return with non-negligible probability, and whether
- * each is orthogonal to the claimed period. A function that satisfies Simon's
- * promise exactly yields all-orthogonal; a real construction with accidental
- * collisions does not, and this is what surfaces that.
+ * Total probability mass sitting on outcomes that are NOT orthogonal to `s` —
+ * i.e. the chance a round hands back a vector that would corrupt the linear
+ * system.
+ *
+ * For any f with f(x) = f(x ⊕ s) everywhere this is exactly zero, promise or no
+ * promise: each preimage class is a union of s-cosets, so every y with y·s = 1
+ * cancels term for term. Accidental collisions skew *which* orthogonal vectors
+ * turn up (that is the real cost, and it is visible in simonDistribution),
+ * never whether they are orthogonal. This function measures that rather than
+ * assuming it, so the claim on the page is checked against the live target
+ * instead of quoted. It is non-zero only when `s` is not a period of the table
+ * at all.
  */
 export function offPeriodMass(table: Uint32Array, n: number, m: number, s: number): number {
   const probs = simonDistribution(table, n, m);

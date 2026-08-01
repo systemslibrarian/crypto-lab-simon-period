@@ -75,7 +75,7 @@ npm run dev
 
 ## Build & Verify
 
-**77 unit tests** (Vitest, colocated in `src/`), including these known-answer tests:
+**78 unit tests** (Vitest, colocated in `src/`), including these known-answer tests:
 
 | KAT | Source | File |
 | --- | --- | --- |
@@ -86,13 +86,13 @@ npm run dev
 | CBC-MAC's `f(b, m) = MAC(α_b ‖ m)` has the affine period `(1 ‖ Eₖ(α₀) ⊕ Eₖ(α₁))`, and is exactly 2-to-1 | Kaplan, Leurent, Leverrier & Naya-Plasencia, CRYPTO 2016 | `src/crypto/targets.test.ts` |
 | Classical period finding costs `√(π/2 · 2^(n−1))` queries — the birthday bound, measured over 400 runs | birthday bound | `src/classical/race.test.ts` |
 
-Beyond the KATs, the suite pins the claims the page makes on screen: that the oracle is unitary and Hadamard is its own inverse; that measurements are orthogonal to the period **even when `f` has accidental collisions on top of it** (the precise reason the attack survives real constructions, asserted to 13 decimal places); that Even-Mansour at n = 6 really does collide accidentally, so the honesty note describes something real; that a full key recovery and a MAC forgery both succeed against the genuine construction and both **fail** when handed a wrong period; that an injective function drives the rank to `n` and leaves zero candidates; that Simon's mean query count sits between `n−1` and `n+3` at every width while the classical mean grows; and that the printed equation `s₅ ⊕ s₃ ⊕ s₀ = 0` selects precisely the bits its vector sets, for all 64 vectors.
+Beyond the KATs, the suite pins the claims the page makes on screen: that the oracle is unitary and Hadamard is its own inverse; that measurements are orthogonal to the period **even when `f` has accidental collisions on top of it** (the precise reason the attack survives real constructions, asserted to 13 decimal places); that Even-Mansour at n = 6 really does collide accidentally, so the honesty note describes something real; that a full key recovery and a MAC forgery both succeed against the genuine construction and both **fail** when handed a wrong period; that an injective function drives the rank to `n` and leaves zero candidates; that Simon's mean query count sits between `n−1` and `n+3` at every width while the classical mean grows; and that the printed equation `s₅ ⊕ s₃ ⊕ s₂ ⊕ s₀ = 0` selects precisely the bits its vector sets, for all 64 vectors.
 
 **Accessibility is gated in CI.** `@axe-core/playwright` scans the production build for WCAG 2.1 A/AA violations in both themes and at a 380px viewport, after a spec that drives every exhibit into its post-interaction states — all four targets, all three widths, the broken / no-period / in-progress verdicts, the secret reveal, both the cancelled and surviving forms of the arithmetic panel, and the measured race. Zero violations, or the deploy does not run.
 
 ## Performance
 
-Everything runs on the main thread with no backend. The statevector holds 2^(n+m) doubles — 4,096 at the largest setting — and one Simon round is `n` Hadamard sweeps, one oracle permutation and two marginals, all of it microseconds. The heaviest action on the page is the query race: 240 complete attacks, each building a fresh target from a SHA-256-seeded Fisher-Yates shuffle, on the order of a second. The cost of the simulation doubles with every qubit added, which is the honest reason the demo stops at six.
+Everything runs on the main thread with no backend. The statevector holds 2^(n+m) doubles — 4,096 at the largest setting — and one Simon round is `n` Hadamard sweeps, one oracle permutation and two marginals, all of it microseconds. The heaviest action on the page is the query race: 240 complete attacks over 120 freshly built targets — one target per trial, each from a SHA-256-seeded Fisher-Yates shuffle, attacked once classically and once quantumly, on the order of a second. The cost of the simulation doubles with every qubit added, which is the honest reason the demo stops at six.
 
 ---
 

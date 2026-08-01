@@ -5,10 +5,18 @@
  * distribution of Simon's algorithm on a perfectly 2-to-1 function is uniform
  * over s⊥, so you can "simulate" the whole thing with one line of sampling
  * code. That line would also lie, because the constructions this demo actually
- * attacks (Even-Mansour) do *not* satisfy the promise exactly: they have
- * accidental collisions, the true distribution is skewed, and the algorithm
- * occasionally returns a vector that is not orthogonal to the period. Only a
- * real amplitude-level simulation reproduces that, so that is what this is.
+ * attacks (Even-Mansour) do *not* satisfy the promise exactly: they collide by
+ * accident on top of the period, and the true distribution is NOT uniform over
+ * s⊥ — some orthogonal outcomes become far likelier than others, which is what
+ * costs the extra queries. Only a real amplitude-level simulation reproduces
+ * that, so that is what this is.
+ *
+ * What does NOT change: every surviving outcome is still orthogonal to the
+ * period. Whenever f(x) = f(x ⊕ s) everywhere, each preimage class is a union
+ * of s-cosets, so the (1 + (−1)^(s·y)) factor is present in every term and each
+ * y with y·s = 1 still cancels exactly. simon.test.ts asserts this to 14
+ * decimals, including for a deliberately over-collided f, and offPeriodMass()
+ * measures it directly for the live targets.
  *
  * Amplitudes are real. Simon's circuit is Hadamards plus an XOR oracle, and
  * both matrices are real, so no imaginary part is ever populated. Storing one
