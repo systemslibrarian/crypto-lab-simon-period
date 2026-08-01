@@ -80,9 +80,29 @@ describe('KAT — Kuwakado & Morii 2012: Even-Mansour’s period is the whitenin
   });
 
   it('a wrong period does not yield the key — the exploit fails closed', async () => {
-    const t = await makeEvenMansourTarget(5);
-    const wrong = (t.truePeriod! ^ 0b00001) & 31;
-    expect(t.exploit(wrong).ok).toBe(false);
+    // Exhaustive over the wrong periods, not a single sample.
+    //
+    // This used to take one wrong period, k₁ ⊕ 1, and check one predicted
+    // block. It failed about 1 run in 6 and read as a flaky test; the real
+    // problem was that a one-block check is not sound. With p = k₁ ⊕ 2^b,
+    // challenge 2^b agrees for EVERY key and every permutation, because both
+    // sides reduce to the same expression — measured, that challenge accepted
+    // the wrong period in 3000 of 3000 trials. `exploit` now decides `ok` by
+    // sweeping all 2^n blocks, so this can assert the real security property:
+    // no wrong period is ever accepted.
+    for (let trial = 0; trial < 8; trial++) {
+      const t = await makeEvenMansourTarget(5);
+      for (let wrong = 0; wrong < 32; wrong++) {
+        if (wrong === t.truePeriod!) continue;
+        const res = t.exploit(wrong);
+        expect(res.ok).toBe(false);
+        // k₂guess = E(0) ⊕ P(period) is injective in `period` because P is a
+        // permutation, so a wrong period never derives the right k₂ either.
+        expect(res.rows[1].match).toBe('bad');
+      }
+      // The true period still succeeds, and on every block.
+      expect(t.exploit(t.truePeriod!).ok).toBe(true);
+    }
   });
 
   it('measurements stay orthogonal to k₁ even though f is not exactly 2-to-1', async () => {

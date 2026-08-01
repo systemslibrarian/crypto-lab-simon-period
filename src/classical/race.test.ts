@@ -121,11 +121,25 @@ describe('the quantum search', () => {
 
 describe('the measured race', () => {
   it('shows quantum flat in n while classical grows exponentially', () => {
-    const rows = [4, 5, 6].map((n) =>
-      runRace(n, n, () => textbookOracle(n, 1 + Math.floor(Math.random() * ((1 << n) - 1))), 60),
-    );
+    // Seeded, because the period was drawn from an unseeded Math.random() while
+    // runRace seeds everything else. That one call was the only thing making
+    // this test irreproducible, and it is what turned the marginal assertion
+    // below into a roughly 1-in-10 failure nobody could re-run.
+    const rows = [4, 5, 6].map((n) => {
+      const rng = makeRng(0xc0ffee + n);
+      return runRace(n, n, () => textbookOracle(n, 1 + Math.floor(rng() * ((1 << n) - 1))), 60);
+    });
     for (const r of rows) {
       expect(r.quantumMean).toBeLessThan(r.n + 4);
+    }
+    // The separation is only real once the birthday bound clears Simon's ~n+O(1).
+    // At n = 4 the two costs are the same size — classical ~sqrt(pi*2^4/2) ~ 5,
+    // quantum ~ 5 — so asserting "classical > quantum" there asserted something
+    // that is not reliably true, and it failed on the observed run at 4.717 vs
+    // 4.733. That n = 4 shows no separation yet is the honest result, and it is
+    // part of the lesson: an exponential only outruns a linear once n is big
+    // enough. The growth-ratio assertions below are what carry the real claim.
+    for (const r of rows.filter((row) => row.n >= 5)) {
       expect(r.classicalMean).toBeGreaterThan(r.quantumMean);
     }
     // Classical cost must grow with n; quantum must not blow up.

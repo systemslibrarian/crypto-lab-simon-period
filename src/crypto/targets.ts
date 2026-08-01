@@ -193,19 +193,45 @@ export async function makeEvenMansourTarget(n: number): Promise<Target> {
       if (challenge === spentOnKeyDerivation) challenge = (challenge + 1) & (size - 1);
       const predicted = applyPerm(P, challenge ^ period) ^ k2Guess;
       const actual = encrypt(challenge);
-      const ok = predicted === actual;
+
+      // `ok` is decided by checking the derived key against EVERY block, not by
+      // the single prediction shown below.
+      //
+      // One block is not a test. A wrong period p leaves the guessed key related
+      // to the real one by P(x ⊕ p) ⊕ P(p) vs P(x ⊕ k₁) ⊕ P(k₁), and for
+      // particular challenges those coincide for structural reasons rather than
+      // by luck: with p = k₁ ⊕ 2^b, challenge 2^b makes the two sides literally
+      // the same expression, so it agrees for every key and every permutation.
+      // A one-block check therefore does not fail closed — measured, it accepted
+      // a wrong period in 100% of 3000 trials at n = 5 for that challenge, and
+      // roughly 1 run in 6 for the challenge chosen above. The suite saw the
+      // latter as a flaky test; it was really an unsound check.
+      //
+      // Sweeping all 2^n blocks is the lab grading itself, not part of the
+      // attack — it costs 2^n table reads on a toy where n <= 6, and it makes
+      // `ok` mean exactly "this key pair reproduces the cipher". The attack's
+      // own cost is unchanged and is stated in the note below.
+      let verifiedBlocks = 0;
+      let ok = true;
+      for (let x = 0; x < size; x++) {
+        if ((applyPerm(P, x ^ period) ^ k2Guess) !== encrypt(x)) {
+          ok = false;
+          break;
+        }
+        verifiedBlocks++;
+      }
       return {
         ok,
         headline: ok ? 'Full key recovered — cipher predicted' : 'Key recovery failed',
         rows: [
           { label: 'recovered k₁ (= the period)', value: hex(period, n), match: period === k1 ? 'ok' : 'bad' },
           { label: 'derived k₂ = E(0) ⊕ P(k₁)', value: hex(k2Guess, n), match: k2Guess === k2 ? 'ok' : 'bad' },
-          { label: `predicted E(${toBits(challenge, n)})`, value: hex(predicted, n), match: ok ? 'ok' : 'bad' },
-          { label: `real E(${toBits(challenge, n)})`, value: hex(actual, n), match: ok ? 'ok' : 'bad' },
+          { label: `predicted E(${toBits(challenge, n)})`, value: hex(predicted, n), match: predicted === actual ? 'ok' : 'bad' },
+          { label: `real E(${toBits(challenge, n)})`, value: hex(actual, n), match: predicted === actual ? 'ok' : 'bad' },
         ],
         note: ok
-          ? 'Both key halves recovered and a fresh block predicted correctly. Classically this construction needs ~2^(n/2) queries; here it took a handful of superposition queries plus one ordinary one.'
-          : 'The period did not yield the key — verify before you trust, always.',
+          ? `Both key halves recovered, and the derived key reproduces all ${verifiedBlocks} blocks of the cipher — not just the one shown. Recovering the key took a handful of superposition queries plus one ordinary encryption of block 0; the full sweep above is this page checking itself, not part of the attack. Classically this construction needs ~2^(n/2) queries.`
+          : 'The period did not yield the key: the derived key fails to reproduce the cipher. Verify before you trust, always — and verify on more than one block, because a single prediction can agree by coincidence.',
       };
     },
   };
