@@ -185,7 +185,6 @@ body {
 }
 
 /* ── hero (managed block, kept in sync across the fleet) ────────────────── */
-/* BEGIN cl-hero standard — managed, keep in sync across fleet */
 .cl-hero {
   display: flex;
   align-items: flex-start;
@@ -246,8 +245,11 @@ body {
     flex-basis: auto;
     width: 100%;
   }
+  .cl-hero-main {
+    flex-basis: auto;
+    min-width: 0;
+  }
 }
-/* END cl-hero standard */
 
 .hero-actions {
   margin: 1rem 0 0;
@@ -1364,5 +1366,17 @@ body {
   .tally > div {
     flex-direction: column;
     gap: 0.1rem;
+  }
+}
+
+
+/* Comfortable tap targets on touch devices without bulking up the mouse UI. */
+@media (pointer: coarse) {
+  #app button,
+  #app select,
+  #app input[type="text"],
+  #app input[type="number"],
+  #app summary {
+    min-height: 44px;
   }
 }
