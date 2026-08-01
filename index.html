@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function () {
+        const saved = localStorage.getItem('theme');
+        document.documentElement.setAttribute('data-theme', saved ?? 'dark');
+      })();
+    </script>
+    <title>Simon's Period — crypto-lab</title>
+    <meta
+      name="description"
+      content="Simon's algorithm in the browser — an exact statevector simulation recovering the hidden period of Even-Mansour and CBC-MAC in O(n) quantum queries."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Simon's Period — crypto-lab" />
+    <meta
+      property="og:description"
+      content="Simon's algorithm in the browser — an exact statevector simulation recovering the hidden period of Even-Mansour and CBC-MAC in O(n) quantum queries."
+    />
+    <meta property="og:url" content="https://systemslibrarian.github.io/crypto-lab-simon-period/" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Simon's Period — crypto-lab" />
+    <meta
+      name="twitter:description"
+      content="Simon's algorithm in the browser — an exact statevector simulation recovering the hidden period of Even-Mansour and CBC-MAC in O(n) quantum queries."
+    />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌀</text></svg>"
+    />
+  </head>
+  <body>
+<!-- BEGIN crypto-lab shared header — managed; edit shared-header.html + re-run reapply-header.py
+     Identical on every lab. Self-contained styles. Accents use each demo's own
+     --accent CSS variable (teal #35d6bb fallback). The ONLY per-repo value is the
+     repo name (crypto-lab-simon-period) in the GitHub link.
+     Source of truth: github.com/systemslibrarian/crypto-lab/shared-header.html -->
+<style>
+  .cl-topbar{
+    /* The bar is always dark (#0b1512) regardless of page theme, so header
+       text must always be light. Mix each lab's --accent toward near-white so
+       the hue still tints the brand but contrast stays >=4.5:1 on the bar even
+       when a lab's accent is dark (e.g. a light-theme #1a56db). */
+    --cl-ink: color-mix(in srgb, var(--accent, #35d6bb) 60%, #eafff8);
+    display:flex;align-items:center;justify-content:space-between;gap:1rem;
+    padding:.7rem clamp(.9rem,3vw,2rem);
+    background:#0b1512;
+    border-bottom:1px solid color-mix(in srgb, var(--accent, #35d6bb) 22%, transparent);
+    font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+    position:sticky;top:0;z-index:1000;
+  }
+  .cl-brand{display:flex;align-items:center;gap:.8rem;text-decoration:none}
+  .cl-badge{
+    flex:0 0 auto;display:grid;place-items:center;width:40px;height:40px;
+    border:1.5px solid var(--accent, #35d6bb);border-radius:10px;
+    color:var(--cl-ink);font-weight:700;font-size:.95rem;letter-spacing:.05em;
+  }
+  .cl-brand-text{display:flex;flex-direction:column;line-height:1.15}
+  .cl-title{color:#eafff8;font-weight:700;font-size:1.05rem;letter-spacing:.12em}
+  .cl-sub{color:#5e8b80;font-size:.72rem;letter-spacing:.04em}
+  .cl-actions{display:flex;align-items:center;gap:.5rem}
+  .cl-btn{
+    display:inline-flex;align-items:center;gap:.4rem;
+    padding:.5rem .85rem;border-radius:10px;
+    border:1px solid color-mix(in srgb, var(--accent, #35d6bb) 38%, transparent);
+    background:transparent;color:var(--cl-ink);cursor:pointer;
+    font:inherit;font-size:.78rem;font-weight:700;letter-spacing:.1em;
+    text-transform:uppercase;text-decoration:none;transition:background .15s,border-color .15s,color .15s;
+  }
+  .cl-btn:hover{
+    background:color-mix(in srgb, var(--accent, #35d6bb) 14%, transparent);
+    border-color:var(--accent, #35d6bb);color:#eafff8;
+  }
+  .cl-btn svg{width:15px;height:15px}
+  .cl-icon{padding:.5rem .6rem;font-size:.95rem}
+  /* Skip-to-content link: first focusable element so keyboard users can bypass
+     this sticky header (WCAG 2.4.1). Hidden until focused. Fixed light-on-dark
+     pair (not --accent, which can be a dark hue on some labs) keeps contrast AA. */
+  .cl-skip-link{
+    position:absolute;left:.5rem;top:-3rem;z-index:1001;
+    padding:.55rem 1rem;border-radius:0 0 10px 10px;
+    background:#eafff8;color:#0b1512;
+    font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+    font-weight:700;font-size:.8rem;letter-spacing:.04em;text-decoration:none;
+    transition:top .15s ease;
+  }
+  .cl-skip-link:focus{top:0;outline:2px solid var(--accent,#35d6bb);outline-offset:2px;}
+  /* hide each lab's own in-page theme toggle — the bar's toggle replaces it.
+     element stays in the DOM so the lab's theme JS keeps working. */
+  body :is(#theme-toggle,#themeToggle,.theme-toggle,.theme-toggle-btn,[data-theme-toggle]):not(#cl-theme-toggle){display:none!important}
+  @media(max-width:560px){
+    .cl-sub{display:none}
+    .cl-btn span{display:none}
+    .cl-btn svg{margin:0}
+  }
+</style>
+<a class="cl-skip-link" href="#app">Skip to content</a>
+<header class="cl-topbar" role="banner" aria-label="Crypto Lab">
+  <a class="cl-brand" href="https://crypto-lab.systemslibrarian.dev/" aria-label="Crypto Lab home">
+    <span class="cl-badge">CL</span>
+    <span class="cl-brand-text">
+      <span class="cl-title">CRYPTO LAB</span>
+      <span class="cl-sub">systemslibrarian.dev</span>
+    </span>
+  </a>
+  <nav class="cl-actions" aria-label="Crypto Lab navigation">
+    <a class="cl-btn" href="https://crypto-lab.systemslibrarian.dev/" aria-label="Crypto Lab menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      <span>Menu</span>
+    </a>
+    <a class="cl-btn" href="https://github.com/systemslibrarian/crypto-lab-simon-period" target="_blank" rel="noopener" aria-label="View this project on GitHub">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7 0-.7 0-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0C17.3 5 18.3 5.3 18.3 5.3c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .4.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+      <span>GitHub</span>
+    </a>
+    <button class="cl-btn cl-icon" id="cl-theme-toggle" type="button" aria-label="Toggle color theme" title="Toggle theme">☀</button>
+  </nav>
+</header>
+<script>
+  (function () {
+    var t = document.getElementById('cl-theme-toggle');
+    if (t) {
+      var cur = function(){ return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'; };
+      var paint = function(){ t.textContent = cur() === 'light' ? '☾' : '☀'; };
+      paint();
+      t.addEventListener('click', function () {
+        var next = cur() === 'light' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', next);
+        try { localStorage.setItem('theme', next); } catch (e) {}
+        paint();
+      });
+    }
+    // A page may have only one banner landmark. This shared site header is it;
+    // demote any banner a lab also declared on its own page header (explicit
+    // role="banner", or an implicit <header> child of <body>) so landmarks stay unique.
+    function dedupeBanner() {
+      var bar = document.querySelector('.cl-topbar');
+      if (!bar) return;
+      document.querySelectorAll('[role="banner"]').forEach(function (el) {
+        if (el !== bar) el.setAttribute('role', 'group');
+      });
+      Array.prototype.forEach.call(document.body ? document.body.children : [], function (el) {
+        if (el.tagName === 'HEADER' && el !== bar && !el.hasAttribute('role')) el.setAttribute('role', 'group');
+      });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', dedupeBanner);
+    else dedupeBanner();
+  })();
+</script>
+<!-- END crypto-lab shared header -->
+    <main id="app" class="shell">
+      <header class="cl-hero">
+        <div class="cl-hero-main">
+          <h1 class="cl-hero-title">Simon's Period</h1>
+          <p class="cl-hero-sub">Simon's algorithm · hidden period · quantum symmetric attacks</p>
+          <p class="cl-hero-desc">
+            Press measure and watch half of every possible answer cancel itself out — then watch the surviving
+            equations pin down a block cipher's key in a handful of queries instead of millions.
+          </p>
+          <p class="hero-actions">
+            <a class="btn btn-primary btn-lg" href="#run">Break Even-Mansour ↓</a>
+          </p>
+        </div>
+        <aside class="cl-hero-why" aria-label="Why it matters">
+          <span class="cl-hero-why-label">WHY IT MATTERS</span>
+          <p class="cl-hero-why-text">
+            The standard answer to quantum computing in symmetric crypto is "double the key length and you're fine" —
+            that answer comes from Grover, and it is only half the story. Simon's algorithm gives an
+            <em>exponential</em> speedup against constructions with internal structure, and doubling the key does
+            nothing about it. Whole modes and MACs are broken outright, not weakened.
+          </p>
+        </aside>
+      </header>
+
+      <section class="intro" aria-labelledby="intro-h">
+        <h2 id="intro-h" class="sr-only">What this is</h2>
+        <p class="intro-lede">
+          Some functions repeat. Feed one a value, feed it a second value, and you get the same answer back — and
+          the gap between those two inputs is always the same secret gap, everywhere in the function. That gap is
+          called the <strong>period</strong>. An ordinary computer can only find it by hunting for a repeat, which
+          takes roughly the square root of the number of inputs: get to a few hundred bits and it is hopeless.
+        </p>
+        <p class="intro-lede">
+          A quantum computer can ask about every input at once, and then — this is the part with no classical
+          counterpart — arrange for all the wrong answers to <em>destroy each other</em> before you look. What
+          survives is always a clue about the period, and a handful of clues is enough. Not a faster search. A
+          different shape of question. Below, you get to ask it.
+        </p>
+      </section>
+
+      <nav class="wayfinder" aria-label="Sections of this demo">
+        <a href="#run" data-way="run"><span class="way-num">1</span> Break it</a>
+        <a href="#interference" data-way="interference"><span class="way-num">2</span> See the cancellation</a>
+        <a href="#system" data-way="system"><span class="way-num">3</span> The equations</a>
+        <a href="#race" data-way="race"><span class="way-num">4</span> Count the queries</a>
+        <a href="#family" data-way="family"><span class="way-num">5</span> Grover vs Simon vs Shor</a>
+        <a href="#honesty" data-way="honesty"><span class="way-num">6</span> Limits</a>
+      </nav>
+
+      <!-- ══ 1. THE COCKPIT ═══════════════════════════════════════════════ -->
+      <section class="cockpit" id="run" aria-labelledby="run-h">
+        <div class="cockpit-head">
+          <h2 id="run-h">Run Simon's algorithm</h2>
+          <p class="cockpit-lede">
+            Pick a target. Each press of <strong>Measure</strong> runs one complete round of the circuit — one
+            superposition query to the function, one interference step, one measurement — and hands you a single
+            linear equation about the hidden period. Collect enough independent equations and the period is forced.
+            Nothing is searched, nothing is guessed.
+          </p>
+        </div>
+
+        <div class="controls">
+          <fieldset class="seg-group">
+            <legend>Target function</legend>
+            <div class="seg seg-wide" id="seg-target" role="group" aria-label="Target function"></div>
+            <p class="seg-note" id="target-note"></p>
+          </fieldset>
+
+          <fieldset class="seg-group">
+            <legend>Input width n</legend>
+            <div class="seg" id="seg-width" role="group" aria-label="Input width in bits"></div>
+            <p class="seg-note">
+              The whole domain is 2<sup>n</sup> inputs. Small enough to simulate exactly; the algorithm does not care.
+            </p>
+          </fieldset>
+        </div>
+
+        <div class="target-card">
+          <div class="target-card-head">
+            <h3 id="target-name">—</h3>
+            <span class="target-source" id="target-source"></span>
+          </div>
+          <dl class="target-legend">
+            <div><dt>input</dt><dd id="legend-in">—</dd></div>
+            <div><dt>output</dt><dd id="legend-out">—</dd></div>
+          </dl>
+          <div class="target-actions">
+            <button type="button" class="btn btn-ghost btn-sm" id="peek" aria-expanded="false" aria-controls="secret-box">
+              Peek at the secret
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm" id="new-secret">New secret</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="reset">Reset equations</button>
+          </div>
+          <div class="secret-box" id="secret-box" hidden>
+            <p class="secret-warn">
+              <span aria-hidden="true">👁</span> Held for verification only. The circuit below never reads this — it
+              only ever queries <code>f</code>.
+            </p>
+            <dl id="secret-list" class="secret-list"></dl>
+          </div>
+        </div>
+
+        <div class="run-grid">
+          <div class="run-left">
+            <h3 class="panel-h">The circuit, one round</h3>
+            <ol class="circuit" id="circuit" aria-label="Simon's circuit, four steps"></ol>
+            <div class="run-buttons">
+              <button type="button" class="btn btn-primary btn-lg" id="measure">Measure once</button>
+              <button type="button" class="btn btn-secondary" id="run-all">Run to a verdict</button>
+            </div>
+            <p class="run-hint" id="run-hint">
+              One press = one query to <code>f</code>. Watch the query counter, not the clock.
+            </p>
+
+            <div class="meter-block">
+              <div class="meter-row">
+                <span class="meter-label" id="rank-label">Independent equations</span>
+                <output class="meter-value" id="rank-value" aria-labelledby="rank-label">0 / 0</output>
+              </div>
+              <div class="meter" id="rank-meter" role="img" aria-label="Rank progress"></div>
+              <p class="meter-note" id="rank-note">
+                The period is pinned once the rank reaches n−1 — one dimension short of everything.
+              </p>
+            </div>
+
+            <dl class="tally">
+              <div><dt>oracle queries</dt><dd id="tally-queries">0</dd></div>
+              <div><dt>equations that taught nothing</dt><dd id="tally-wasted">0</dd></div>
+              <div><dt>periods still possible</dt><dd id="tally-candidates">—</dd></div>
+            </dl>
+          </div>
+
+          <div class="run-right">
+            <h3 class="panel-h">Verdict</h3>
+            <div class="verdict" id="verdict" role="status" aria-live="polite">
+              <p class="verdict-line"><span class="verdict-icon" aria-hidden="true">◌</span> <span id="verdict-text">Not started</span></p>
+              <p class="verdict-sub" id="verdict-sub">Press <em>Measure once</em> to send the first query.</p>
+            </div>
+
+            <div class="exploit" id="exploit" hidden>
+              <h4 id="exploit-h">—</h4>
+              <div
+                class="exploit-rows"
+                id="exploit-rows"
+                role="region"
+                aria-labelledby="exploit-h"
+                tabindex="0"
+              ></div>
+              <p class="exploit-note" id="exploit-note"></p>
+            </div>
+
+            <div class="consequence" id="consequence">
+              <span class="consequence-label">IF THE PERIOD FALLS</span>
+              <p id="consequence-text">—</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 2. INTERFERENCE ══════════════════════════════════════════════ -->
+      <section class="panel" id="interference" aria-labelledby="interference-h">
+        <h2 id="interference-h">Why half the answers vanish</h2>
+        <p class="panel-lede">
+          This is the whole trick, and it has no classical analogue. After the query, the machine holds every input
+          that shares the observed output — for a periodic function that is exactly a pair, <code>x₀</code> and
+          <code>x₀ ⊕ s</code>. The final Hadamard sends each of them down a path to <em>every</em> possible outcome
+          <code>y</code>, with a sign of <code>+</code> or <code>−</code>. Where the two signs disagree, the paths
+          cancel and that outcome becomes impossible.
+        </p>
+
+        <div class="interf-grid">
+          <div class="interf-col">
+            <h3 class="panel-h">Before the final Hadamard</h3>
+            <p class="panel-note" id="before-note">Run a measurement to populate this.</p>
+            <div class="amp-grid" id="grid-before" role="group" aria-label="Input amplitudes before the final Hadamard"></div>
+          </div>
+          <div class="interf-col">
+            <h3 class="panel-h">After the final Hadamard</h3>
+            <p class="panel-note" id="after-note">Cells reading <strong>0</strong> were cancelled by interference.</p>
+            <div class="amp-grid" id="grid-after" role="group" aria-label="Input amplitudes after the final Hadamard"></div>
+          </div>
+        </div>
+
+        <div class="amp-legend" role="list" aria-label="Legend">
+          <span role="listitem"><span class="chip chip-pos" aria-hidden="true">+</span> amplitude positive</span>
+          <span role="listitem"><span class="chip chip-neg" aria-hidden="true">−</span> amplitude negative</span>
+          <span role="listitem"><span class="chip chip-zero" aria-hidden="true">0</span> cancelled — impossible outcome</span>
+          <span role="listitem"><span class="chip chip-measured" aria-hidden="true">◎</span> the outcome measured</span>
+        </div>
+
+        <div class="arith" id="arith">
+          <h3 class="panel-h" id="arith-h">Do the arithmetic yourself</h3>
+          <p class="panel-note">
+            Select any outcome above and both contributing paths are computed here, independently, and added. Nothing
+            is asserted — the sum on the right is the sum of the two numbers on the left.
+          </p>
+          <div class="arith-body" id="arith-body" role="status" aria-live="polite">
+            <p class="panel-note">Pick a cell in either grid.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 3. THE LINEAR SYSTEM ═════════════════════════════════════════ -->
+      <section class="panel" id="system" aria-labelledby="system-h">
+        <h2 id="system-h">The equations, and what they pin down</h2>
+        <p class="panel-lede">
+          Every surviving outcome <code>y</code> satisfies <code>y · s = 0</code> over GF(2) — the XOR of the bits of
+          <code>s</code> that <code>y</code> selects is zero. Each measurement is therefore one free linear equation
+          about the secret. Not a hint, not a probability: an equation.
+        </p>
+
+        <div class="sys-grid">
+          <div>
+            <h3 class="panel-h">Measurements, in order</h3>
+            <div class="eq-list" id="eq-list" role="log" aria-live="polite" aria-label="Measured equations">
+              <p class="panel-note">No measurements yet.</p>
+            </div>
+          </div>
+          <div>
+            <h3 class="panel-h">Row-reduced system</h3>
+            <div
+              class="matrix-wrap"
+              id="matrix-wrap"
+              role="region"
+              aria-label="Row-reduced coefficient matrix"
+              tabindex="0"
+            >
+              <p class="panel-note">Empty.</p>
+            </div>
+            <h3 class="panel-h">Still consistent with everything measured</h3>
+            <div class="cand-list" id="cand-list" role="status" aria-live="polite">
+              <p class="panel-note">—</p>
+            </div>
+          </div>
+        </div>
+
+        <details class="aside">
+          <summary>Why n−1 equations and not n</summary>
+          <p>
+            <code>s = 0</code> satisfies <code>y · s = 0</code> for every <code>y</code>, so the solution space always
+            contains zero and can never shrink below one dimension. Rank <code>n−1</code> leaves a two-element
+            solution space <code>{0, s}</code>, and since a period is by definition non-zero, <code>s</code> is
+            determined. Rank <code>n</code> would leave only <code>{0}</code> — which is the honest answer that the
+            function has no period at all, and is exactly what the control target produces.
+          </p>
+          <p>
+            Measurements can repeat, and <code>y = 0</code> is a perfectly legal outcome that carries no information.
+            That is why the expected cost is <code>n</code>-and-a-bit queries rather than exactly <code>n−1</code>,
+            and why the counter above tracks the wasted ones separately.
+          </p>
+        </details>
+      </section>
+
+      <!-- ══ 4. THE RACE ══════════════════════════════════════════════════ -->
+      <section class="panel" id="race" aria-labelledby="race-h">
+        <h2 id="race-h">Count the queries</h2>
+        <p class="panel-lede">
+          Both sides below are <strong>measured, not plotted</strong>. The classical attacker runs a real birthday
+          collision search against the same function table the circuit queries; the quantum side runs complete Simon
+          rounds through the same simulator you have been pressing. Both count an oracle query the same way.
+        </p>
+        <div class="race-controls">
+          <button type="button" class="btn btn-secondary" id="race-run">Race them</button>
+          <p class="panel-note" id="race-status" role="status" aria-live="polite">Not run yet.</p>
+        </div>
+        <div class="race-out" id="race-out"></div>
+        <details class="aside">
+          <summary>Why the gap looks modest here and is catastrophic in reality</summary>
+          <p>
+            At n = 6 the classical attacker needs about 2³ = 8 queries and the quantum attacker about 7 — barely a
+            difference, because √64 is small. The exponent is the whole story: at n = 128 the classical attacker needs
+            about 2⁶⁴ ≈ 1.8 × 10¹⁹ queries and Simon needs roughly 130. The demo runs at a size you can watch, and
+            the growth rates are what carry over.
+          </p>
+        </details>
+      </section>
+
+      <!-- ══ 5. THE FAMILY ════════════════════════════════════════════════ -->
+      <section class="panel" id="family" aria-labelledby="family-h">
+        <h2 id="family-h">Grover, Simon, Shor — three different threats</h2>
+        <p class="panel-lede">
+          "Quantum breaks crypto" collapses three unrelated results into one sentence. They differ in what they need,
+          what they give, and what you do about them.
+        </p>
+        <div class="table-wrap" role="region" aria-label="Comparison of Grover, Simon and Shor" tabindex="0">
+          <table class="cmp">
+            <caption class="sr-only">Grover, Simon and Shor compared across five properties</caption>
+            <thead>
+              <tr>
+                <th scope="col">&nbsp;</th>
+                <th scope="col">Grover</th>
+                <th scope="col">Simon</th>
+                <th scope="col">Shor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">What it needs</th>
+                <td>Nothing. Any searchable predicate.</td>
+                <td>A hidden XOR period — internal structure.</td>
+                <td>Periodicity over the integers.</td>
+              </tr>
+              <tr>
+                <th scope="row">Speedup</th>
+                <td>Quadratic: 2<sup>n</sup> → 2<sup>n/2</sup></td>
+                <td><strong>Exponential:</strong> 2<sup>n/2</sup> → O(n)</td>
+                <td><strong>Exponential:</strong> sub-exponential → polynomial</td>
+              </tr>
+              <tr>
+                <th scope="row">Typical victim</th>
+                <td>AES-128 key search (→ 2<sup>64</sup> work)</td>
+                <td>Even-Mansour, CBC-MAC, 3-round Feistel, slide attacks</td>
+                <td>RSA, finite-field and elliptic-curve Diffie-Hellman</td>
+              </tr>
+              <tr>
+                <th scope="row">The fix</th>
+                <td>Double the key length.</td>
+                <td>Doubling does nothing. Remove the structure or add rounds.</td>
+                <td>Replace the primitive outright — lattices, codes, hashes.</td>
+              </tr>
+              <tr>
+                <th scope="row">Access needed</th>
+                <td>Offline; the predicate is yours to evaluate.</td>
+                <td>
+                  <strong>Superposition queries to the keyed primitive (Q2).</strong> The strongest assumption of the
+                  three, and the honest caveat.
+                </td>
+                <td>Offline; the public key is public.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ══ 6. WHAT IT BREAKS ════════════════════════════════════════════ -->
+      <section class="panel" id="breaks" aria-labelledby="breaks-h">
+        <h2 id="breaks-h">What this actually breaks</h2>
+        <p class="panel-lede">
+          Simon's algorithm is not a curiosity that happens to have a cryptographic application. Between 2010 and
+          2016 it was turned into a general tool against symmetric constructions, and the pattern is always the same:
+          find a function built from the primitive whose period is the secret.
+        </p>
+        <ul class="breaks" role="list">
+          <li role="listitem" class="break-card break-live">
+            <span class="break-tag" aria-label="Implemented in this demo"><span aria-hidden="true">▶</span> live above</span>
+            <h3>Even-Mansour</h3>
+            <p>
+              <code>E(x) = P(x ⊕ k₁) ⊕ k₂</code>. Set <code>f(x) = E(x) ⊕ P(x)</code>; its period is
+              <code>k₁</code>. Classically secure to 2<sup>n/2</sup>; quantum-broken in O(n).
+            </p>
+            <p class="break-cite">Kuwakado &amp; Morii, ISIT 2012</p>
+          </li>
+          <li role="listitem" class="break-card break-live">
+            <span class="break-tag" aria-label="Implemented in this demo"><span aria-hidden="true">▶</span> live above</span>
+            <h3>CBC-MAC and its relatives</h3>
+            <p>
+              <code>f(b, m) = MAC(α_b ‖ m)</code> has period <code>(1, Eₖ(α₀) ⊕ Eₖ(α₁))</code>. Recovering it is an
+              existential forgery. The same argument reaches PMAC, GMAC, OCB and GCM.
+            </p>
+            <p class="break-cite">Kaplan, Leurent, Leverrier &amp; Naya-Plasencia, CRYPTO 2016</p>
+          </li>
+          <li role="listitem" class="break-card">
+            <span class="break-tag break-tag-off" aria-label="Described, not implemented"><span aria-hidden="true">◇</span> described only</span>
+            <h3>3-round Feistel</h3>
+            <p>
+              Fix two distinct left inputs <code>α₀, α₁</code> and define <code>f(b, x)</code> from the left half of
+              the output XOR <code>α_b</code>. The period reveals the round-function difference and distinguishes the
+              Feistel from a random permutation in O(n) — a construction proved secure classically by Luby-Rackoff.
+            </p>
+            <p class="break-cite">Kuwakado &amp; Morii, ISIT 2010</p>
+          </li>
+          <li role="listitem" class="break-card">
+            <span class="break-tag break-tag-off" aria-label="Described, not implemented"><span aria-hidden="true">◇</span> described only</span>
+            <h3>Slide attacks</h3>
+            <p>
+              A cipher with identical rounds and a self-similar key schedule satisfies a slide relation. Written as a
+              period, the classical 2<sup>n/2</sup> slide attack becomes polynomial — the clearest case of "structure
+              that was merely a weakness becomes fatal".
+            </p>
+            <p class="break-cite">Bonnetain, Naya-Plasencia &amp; Schrottenloher, 2019</p>
+          </li>
+        </ul>
+        <div class="countermeasure">
+          <h3>What survives</h3>
+          <p>
+            The countermeasure is not longer keys — Simon does not care how long <code>k₂</code> is. It is
+            <strong>removing the algebraic self-similarity</strong> the period rides on: more rounds with independent
+            subkeys, a key schedule that is not self-similar, domain separation so that no attacker-controlled
+            function of the primitive is periodic, and modes whose masks are not simple XOR offsets. A pseudorandom
+            permutation with no exploitable structure has no period to find, which is exactly what the control target
+            on this page demonstrates.
+          </p>
+        </div>
+      </section>
+
+      <!-- ══ 7. HONESTY ═══════════════════════════════════════════════════ -->
+      <section class="panel panel-honesty" id="honesty" aria-labelledby="honesty-h">
+        <h2 id="honesty-h">What this demo does not prove</h2>
+        <ul class="honesty-list" role="list">
+          <li role="listitem">
+            <strong>No quantum hardware is involved.</strong> Everything here is an exact classical statevector
+            simulation — real amplitudes, real Hadamards, a real unitary oracle, 2<sup>n+m</sup> complex numbers held
+            in a typed array. Exact does not mean scalable: the cost of this simulation doubles with every qubit,
+            which is precisely why a real quantum computer would be needed at cryptographic sizes.
+          </li>
+          <li role="listitem">
+            <strong>The simulation is exact, and it is not a shortcut.</strong> For a function that satisfies Simon's
+            promise exactly, the algorithm's output distribution is uniform over <code>s⊥</code> and can be sampled
+            classically in one line — so a "simulation" of the textbook case is trivially exact and also teaches
+            nothing. This demo does not take that shortcut, because the constructions attacked here do
+            <em>not</em> satisfy the promise exactly: Even-Mansour's function collides by accident on top of its
+            period, which skews the distribution, and only an amplitude-level simulation reproduces that. What is
+            exact here is the linear algebra of the circuit itself — every Hadamard and the oracle are applied as
+            real unitaries to the full state.
+          </li>
+          <li role="listitem">
+            <strong>The Q2 model is a strong assumption.</strong> These attacks need the attacker to query the keyed
+            primitive <em>in superposition</em> — to hand a quantum device the secret key and ask it to encrypt a
+            superposition of plaintexts. No deployed system offers that today, and it may never be offered. Some of
+            these attacks have weaker Q1 variants; most do not. The demo shows what breaks <em>if</em> that access
+            exists, and that is the honest framing.
+          </li>
+          <li role="listitem">
+            <strong>Not production cryptography.</strong> A 4-to-6-bit block cipher is broken by definition; the
+            whole codebook fits on screen. The point is that the attack's cost grows like <code>n</code> while the
+            classical attack's grows like <code>2^(n/2)</code>, and that gap is real at every size.
+          </li>
+          <li role="listitem">
+            <strong>Only two of the four listed breaks are implemented.</strong> Even-Mansour and CBC-MAC run live
+            above, with the recovered key and the forged tag checked against the real construction. The 3-round
+            Feistel distinguisher and the quantum slide attack are described and cited, not built.
+          </li>
+          <li role="listitem">
+            <strong>Simon's algorithm can be wrong, and this demo checks.</strong> The linear system can name a
+            candidate that is not a period. Every candidate is verified against <code>f</code> over the whole domain
+            before it is reported, and a candidate that fails is rejected on screen rather than quietly retried.
+          </li>
+        </ul>
+      </section>
+
+      <footer class="scripture-footer">
+        <p>
+          Related demos:
+          <a href="https://systemslibrarian.github.io/crypto-lab-shor/">crypto-lab-shor</a> ·
+          <a href="https://systemslibrarian.github.io/crypto-lab-grover/">crypto-lab-grover</a> ·
+          <a href="https://systemslibrarian.github.io/crypto-lab-harvest-timeline/">crypto-lab-harvest-timeline</a> ·
+          <a href="https://systemslibrarian.github.io/crypto-lab-mac-race/">crypto-lab-mac-race</a> ·
+          <a href="https://systemslibrarian.github.io/crypto-lab-aes-modes/">crypto-lab-aes-modes</a>
+        </p>
+        <p>So whether you eat or drink or whatever you do, do it all for the glory of God. — 1 Corinthians 10:31</p>
+      </footer>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

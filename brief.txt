@@ -1,0 +1,11 @@
+NEW DEMO BRIEF
+- Repo name:         crypto-lab-simon-period
+- Short name (H1):   Simon's Period
+- Subtitle:          Simon's algorithm · hidden period · quantum symmetric attacks
+- One-liner:         Simon's algorithm finds a hidden period in a black-box function using exponentially fewer queries than any classical algorithm — the quantum attack that breaks Even-Mansour, CBC-MAC, and 3-round Feistel.
+- Concept to teach:  Simon's algorithm is the quantum threat to symmetric crypto that isn't Grover. Grover gives a square-root speedup (halves the key length). Simon gives an exponential speedup against structured constructions — if the function has a hidden period s, Simon finds it in O(n) quantum queries vs O(2^(n/2)) classical. This is why doubling key length doesn't save every symmetric construction.
+- Primitives/spec:   Simon 1994/1997 ("On the Power of Quantum Computation"), Kuwakado-Morii 2012 (Simon's attack on Even-Mansour), Kaplan-Leurent-Leverrier-Naya-Plasencia 2016 (quantum attacks on Feistel/CBC-MAC)
+- Accent (--accent): #a855f7
+- Favicon emoji:     🌀
+- In scope:          Interactive Simon's algorithm: define a function f with hidden period s over a small domain (4-6 bits); quantum circuit visualization: Hadamard → query → Hadamard → measure; each measurement yields a vector orthogonal to s; watch the GF(2) linear system fill up — when rank reaches n-1, s is uniquely determined; the learner clicks "measure" repeatedly and watches equations accumulate until the system solves; comparison panel: Grover (√N speedup, unstructured) vs Simon (exponential speedup, structured) vs Shor (exponential, number-theoretic); "what does this break?" — Even-Mansour, CBC-MAC, 3-round Feistel, slide attacks become efficient; links to Shor and Grover demos
+- Non-goals:         No real quantum computation (simulated classically — state this, with the note that the simulation is exact for Simon's because the algorithm's output distribution is efficiently sampleable); no full Feistel attack implementation; no post-quantum symmetric countermeasures (mention doubling rounds / moving to PRPs without structure)
