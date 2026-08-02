@@ -22,7 +22,11 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: `npm run preview -- --port ${PORT} --strictPort`,
+    // Build first: `preview` only serves whatever is already in dist/. Without
+    // the build in front, a failing compile leaves the last good bundle on disk
+    // and the suite passes green against source that no longer compiles —
+    // which silently invalidates mutation checking.
+    command: `npm run build && npm run preview -- --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}${BASE}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
