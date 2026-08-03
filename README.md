@@ -63,7 +63,9 @@ npm install
 npm run dev
 ```
 
-`npm test` runs the unit suite; `npm run build && npm run test:a11y` runs the production build through the accessibility gate.
+`npm test` runs the unit suite; `npm run test:e2e` builds and serves the production bundle and runs the browser suite against it — the functional claims spec and the accessibility gate.
+
+**Functional browser gate:** `e2e/claims.spec.ts` drives every target and asserts what the page says, checked against the GF(2) arithmetic redone inside the test rather than against constants. The period in the verdict must be the whitening key the secret panel is holding; the recovered Even-Mansour key must reproduce the cipher's own answer for a block it never queried; the forged CBC-MAC tag must equal what the real MAC returns for a message never queried; every outcome the interference grid cancels with `y·s = 1` must really cancel and every surviving outcome must satisfy `y·s = 0`; the per-outcome arithmetic panel's signs must each be `(−1)^(x·y)` and its printed sum must be the sum of its printed terms, with the contributing inputs paired by `s`; every measured equation must satisfy `y·s = 0`; the rank must be monotone and climb only on rows flagged NEW; and the race's headline ratio must be the two measured means beside it with the birthday bound equal to `sqrt(2^n)`. The no-period control must prove absence exhaustively — all `2^n − 1` candidates tested, none holding. Uncaught page exceptions fail the run.
 
 ## Related Demos
 

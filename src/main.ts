@@ -638,7 +638,17 @@ async function runRacePanel(): Promise<void> {
   const out = el('race-out');
   btn.disabled = true;
   const trials = 40;
-  status.textContent = `Running ${trials} trials per width against fresh ${TARGET_LABELS[state.targetId]} instances…`;
+  // The race spans three widths and yields the event loop between them, and the
+  // target selector stays live throughout — a visitor may switch target while
+  // it runs. Read `state.targetId` once, here, and use that snapshot for every
+  // trial and for the caption. Reading it live meant a switch landing on one of
+  // those boundaries silently measured the later widths against a DIFFERENT
+  // function than the earlier ones, and then labelled the whole table with
+  // whichever target happened to be selected when the last row landed: three
+  // rows presented as one experiment that were two.
+  const racedId = state.targetId;
+  const racedLabel = TARGET_LABELS[racedId];
+  status.textContent = `Running ${trials} trials per width against fresh ${racedLabel} instances…`;
   clear(out);
 
   const rng = makeRng(0x5170ce);
@@ -646,7 +656,7 @@ async function runRacePanel(): Promise<void> {
     let q = 0;
     let c = 0;
     for (let i = 0; i < trials; i++) {
-      const t = await makeTarget(state.targetId, n);
+      const t = await makeTarget(racedId, n);
       q += quantumPeriodSearch(t.table, n, t.m, rng).queries;
       c += classicalPeriodSearch(t.table, n, rng).queries;
     }
@@ -654,7 +664,7 @@ async function runRacePanel(): Promise<void> {
     status.textContent = `Completed n = ${n}…`;
     await wait(0);
   }
-  status.textContent = `Done — ${trials} trials at each width, against ${TARGET_LABELS[state.targetId]}. Every number is a measured mean.`;
+  status.textContent = `Done — ${trials} trials at each width, against ${racedLabel}. Every number is a measured mean.`;
   btn.disabled = false;
 }
 
