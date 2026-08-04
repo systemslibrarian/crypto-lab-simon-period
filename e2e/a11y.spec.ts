@@ -79,8 +79,13 @@ async function driveDemos(page: Page): Promise<void> {
   await expect(page.locator('#verdict')).toHaveClass(/is-working/);
 
   // Exhibit 7 — the measured race, a real computation over 120 attack runs.
+  // Wait for the caption, not just the third row: the row lands first and the
+  // caption and the re-enabled button land after, so scanning on the row count
+  // alone runs axe against a DOM still being written.
   await page.locator('#race-run').click();
   await expect(page.locator('#race-out .race-row')).toHaveCount(3, { timeout: 120_000 });
+  await expect(page.locator('#race-status')).toContainText('Done —', { timeout: 120_000 });
+  await expect(page.locator('#race-run')).toBeEnabled();
 }
 
 async function prepare(page: Page): Promise<void> {
