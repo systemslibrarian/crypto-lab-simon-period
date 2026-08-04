@@ -274,6 +274,13 @@ function verdictSpec(): VerdictSpec {
     case 'solved': {
       const s = state.solved!.period;
       const breaks = t && BREAKS_SOMETHING.has(t.id);
+      // A break claim states the model it holds in. Every query counted above
+      // was a superposition query to the *keyed* primitive — the Q2 model — and
+      // a verdict that says "BROKEN" without saying so is claiming more than
+      // this run learned.
+      const qualifier = breaks
+        ? ' Broken in the Q2 model only — every query above was a superposition query to the keyed primitive, which no deployed system offers.'
+        : '';
       return {
         cls: breaks ? 'is-broken' : 'is-working',
         icon: breaks ? '⚠' : '✓',
@@ -282,7 +289,7 @@ function verdictSpec(): VerdictSpec {
           state.measurements.length,
           'query',
           'queries',
-        )} spent.`,
+        )} spent.${qualifier}`,
       };
     }
     case 'noPeriod':

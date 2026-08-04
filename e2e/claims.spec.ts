@@ -127,6 +127,11 @@ test('even-mansour: the recovered key is the held key, and it reproduces the cip
   const s = capture(verdict, /BROKEN — period s = ([01]+)/, 'period');
   expect(verdict).toContain(`Verified against f over all ${1 << s.length} inputs`);
   expect(verdict).toContain('f(x) = f(x ⊕ s) everywhere');
+  // A break claim has to state the access it needed. Simon's attack lives in the
+  // Q2 model, and a verdict that says BROKEN without saying so claims more than
+  // this run learned.
+  expect(verdict).toContain('Broken in the Q2 model only');
+  expect(verdict).toContain('superposition query to the keyed primitive');
 
   // The queries the verdict counts are the equations the log holds.
   const queries = Number(capture(verdict, /(\d+) quer(?:y|ies) spent/, 'query count'));
@@ -166,6 +171,7 @@ test('cbc-mac: the forged tag is the tag the real MAC returns, for a message nev
   await expect(page.locator('#verdict')).toHaveClass(/is-broken/);
   const verdict = await textOf(page.locator('#verdict'));
   expect(verdict).toMatch(/BROKEN — period s = [01]+/);
+  expect(verdict).toContain('Broken in the Q2 model only');
 
   const exploit = await textOf(page.locator('#exploit'));
   expect(exploit).toContain('Forgery accepted by the real MAC');
@@ -195,6 +201,9 @@ test('textbook target: the period is recovered, and the verdict is not dressed a
   expect(verdict).toContain('✓');
   expect(verdict).not.toContain('Collecting equations');
   expect(verdict).toContain('Verified against f over all 32 inputs');
+  // No key, so nothing to break — and therefore no break qualifier either. The
+  // Q2 caveat belongs on the two verdicts that claim a break and nowhere else.
+  expect(verdict, 'a keyless function is not broken in any model').not.toContain('Q2');
   await expect(page.locator('#exploit')).toHaveClass(/neutral/);
 
   const exploit = await textOf(page.locator('#exploit'));
@@ -448,4 +457,434 @@ test('the race is measured, and every headline ratio is the two numbers beside i
     Number(capture(flat(raw), /classical \/ quantum = ([\d.]+)×/, 'ratio')),
   );
   expect(ratios[2]).toBeGreaterThan(ratios[0]!);
+
+  // The caption names the target the numbers came from, and the control is not
+  // left dead behind the run.
+  expect(await textOf(page.locator('#race-status'))).toBe(
+    'Done — 40 trials at each width, against Even-Mansour. Every number is a measured mean.',
+  );
+  await expect(page.locator('#race-run')).toBeEnabled();
+  await page.locator('#race-run').click();
+  await expect(page.locator('#race-out .race-row')).toHaveCount(3, { timeout: 120_000 });
+  await expect(page.locator('#race-status')).toContainText('Done —', { timeout: 120_000 });
+});
+
+/** The race rows as numbers, with the bar geometry that draws them. */
+interface RaceRow {
+  n: number;
+  quantum: number;
+  classical: number;
+  ratio: number;
+  quantumWidth: number;
+  classicalWidth: number;
+}
+
+/**
+ * The headline ratio is computed from the full-precision means, while the bars
+ * print theirs to one decimal, so the check is against the interval that
+ * rounding admits — not a loose tolerance, the exact one.
+ */
+function expectRatioIsTheseNumbersDivided(r: RaceRow): void {
+  const low = (r.classical - 0.05) / (r.quantum + 0.05);
+  const high = (r.classical + 0.05) / (r.quantum - 0.05);
+  expect(r.ratio, `n=${r.n}: headline ratio vs the bars it sits above`).toBeGreaterThan(low - 0.005);
+  expect(r.ratio, `n=${r.n}: headline ratio vs the bars it sits above`).toBeLessThan(high + 0.005);
+}
+
+/**
+ * The bars are laid out from the full-precision means against the longer of the
+ * pair, while the label on each bar prints to one decimal — so, exactly as for
+ * the headline ratio above, the check is the interval that rounding admits and
+ * not the rounded value itself. At n = 6 against the control the gap is real:
+ * a bar drawn from 12.95 is 20.234% wide where its own label, 13.0, would say
+ * 20.313%. Both numbers are honest; only an assertion that confuses them is not.
+ */
+function expectBarsDrawnToScale(r: RaceRow): void {
+  expect(r.classicalWidth === 100 || r.quantumWidth === 100, `n=${r.n}: the longer bar is full width`).toBe(true);
+  const maxLow = Math.max(r.quantum - 0.05, r.classical - 0.05, 1);
+  const maxHigh = Math.max(r.quantum + 0.05, r.classical + 0.05, 1);
+  for (const [label, printed, width] of [
+    ['quantum', r.quantum, r.quantumWidth],
+    ['classical', r.classical, r.classicalWidth],
+  ] as const) {
+    const why = `n=${r.n}: ${label} bar length vs the number printed on it`;
+    expect(width, why).toBeGreaterThanOrEqual(((printed - 0.05) / maxHigh) * 100);
+    expect(width, why).toBeLessThanOrEqual(((printed + 0.05) / maxLow) * 100);
+  }
+}
+
+async function readRace(page: Page): Promise<RaceRow[]> {
+  return page.locator('#race-out .race-row').evaluateAll((rows) =>
+    rows.map((row) => {
+      const head = row.querySelector('.race-row-head')!.textContent!.replace(/\s+/g, ' ');
+      const bars = Array.from(row.querySelectorAll('.race-bar'));
+      const value = (i: number): number => Number(bars[i]!.querySelector('.bar-value')!.textContent!.trim());
+      const width = (i: number): number =>
+        Number.parseFloat((bars[i]!.querySelector('.bar-fill') as HTMLElement).style.width || '0');
+      return {
+        n: Number(/n = (\d+)/.exec(head)![1]),
+        quantum: value(0),
+        classical: value(1),
+        ratio: Number(/classical \/ quantum = ([\d.]+)×/.exec(head)![1]),
+        quantumWidth: width(0),
+        classicalWidth: width(1),
+      };
+    }),
+  );
+}
+
+test('against the control the classical attacker exhausts the domain, which is the mean it prints', async ({
+  page,
+}) => {
+  // A permutation never collides, so the birthday search never terminates early
+  // and costs exactly one query per input: 16, 32, 64. If the classical bar were
+  // a plotted 2^(n/2) curve rather than a mean over runs actually performed, it
+  // could not print those numbers. This is the exhibit's "measured, not plotted"
+  // claim reduced to an exact equality.
+  await chooseTarget(page, 'no-period', 'No period (control)');
+  await page.locator('#race-run').click();
+  await expect(page.locator('#race-out .race-row')).toHaveCount(3, { timeout: 120_000 });
+  await expect(page.locator('#race-status')).toContainText('Done —', { timeout: 120_000 });
+  expect(await textOf(page.locator('#race-status'))).toContain('against No period (control)');
+
+  for (const r of await readRace(page)) {
+    expect(r.classical, `n=${r.n}: every one of the ${1 << r.n} inputs was queried`).toBe(1 << r.n);
+    // Proving absence needs the rank to reach n, so at least n rounds.
+    expect(r.quantum, `n=${r.n}: proving no period needs rank n`).toBeGreaterThanOrEqual(r.n);
+    expect(r.quantum, `n=${r.n}: within the 16n round budget`).toBeLessThanOrEqual(16 * r.n);
+    expectRatioIsTheseNumbersDivided(r);
+    expectBarsDrawnToScale(r);
+  }
+});
+
+/**
+ * Regression — the race read `state.targetId` live inside its trial loop and
+ * again when writing its caption, while the target selector stayed enabled
+ * throughout. The loop yields the event loop between widths, so a switch landing
+ * on one of those boundaries measured the later rows against a different
+ * function than the earlier ones and then labelled the whole table with whatever
+ * was selected when the last row landed: three rows presented as one experiment
+ * that were two. The switch below is queued before the race schedules its own
+ * yield, so it lands on exactly that boundary.
+ *
+ * The discriminator is the classical mean: against the control it is the domain
+ * size exactly (16/32/64, per the test above), against Even-Mansour it is single
+ * digits. A caption fix alone would not satisfy this.
+ */
+test('a target switch mid-race cannot retarget or relabel a run already under way', async ({ page }) => {
+  await page.evaluate(() => {
+    const race = document.getElementById('race-run') as HTMLButtonElement;
+    const other = document.querySelector<HTMLButtonElement>('#seg-target button[data-target="no-period"]')!;
+    setTimeout(() => other.click(), 0);
+    race.click();
+  });
+  await expect(page.locator('#target-name')).toHaveText('No period (control)');
+  await expect(page.locator('#race-out .race-row')).toHaveCount(3, { timeout: 120_000 });
+  await expect(page.locator('#race-status')).toContainText('Done —', { timeout: 120_000 });
+
+  expect(await textOf(page.locator('#race-status')), 'the caption names the target actually raced').toContain(
+    'against Even-Mansour',
+  );
+  for (const r of await readRace(page)) {
+    expect(r.classical, `n=${r.n}: measured against Even-Mansour, not the control`).toBeLessThan(1 << r.n);
+    expectRatioIsTheseNumbersDivided(r);
+    expectBarsDrawnToScale(r);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// The counters, and the failure paths
+// ---------------------------------------------------------------------------
+
+interface Tally {
+  queries: number;
+  wasted: number;
+  candidates: string;
+  rank: number;
+  needed: number;
+}
+
+async function readTally(page: Page): Promise<Tally> {
+  const rankText = await textOf(page.locator('#rank-value'));
+  return {
+    queries: Number(await textOf(page.locator('#tally-queries'))),
+    wasted: Number(await textOf(page.locator('#tally-wasted'))),
+    candidates: await textOf(page.locator('#tally-candidates')),
+    rank: Number(capture(rankText, /^(\d+) \//, 'rank')),
+    needed: Number(capture(rankText, /\/ (\d+) needed/, 'rank target')),
+  };
+}
+
+/**
+ * Every counter on the run panel, cross-checked against every other surface
+ * reporting the same quantity. Queries must split exactly into the equations
+ * that raised the rank and the ones that taught nothing; the rank appears in
+ * four places including the screen-reader label; and the candidate count is
+ * forced by the rank rather than tracked separately.
+ */
+async function assertCountersConsistent(page: Page, n: number): Promise<Tally> {
+  const t = await readTally(page);
+  expect(t.needed, 'the rank target is n-1').toBe(n - 1);
+
+  const flags = (await page.locator('#eq-list .eq .eq-flag').allInnerTexts()).map(flat);
+  expect(flags.length, 'one equation logged per oracle query').toBe(t.queries);
+  const accepted = flags.filter((f) => f === 'NEW').length;
+  const noInfo = flags.filter((f) => f === 'y = 0, NO INFO').length;
+  const redundant = flags.filter((f) => f === 'REDUNDANT').length;
+  expect(accepted + noInfo + redundant, 'every equation carries exactly one known flag').toBe(t.queries);
+  expect(accepted, 'the rank is the count of equations that raised it').toBe(t.rank);
+  expect(noInfo + redundant, '"taught nothing" is exactly the non-NEW equations').toBe(t.wasted);
+  expect(t.rank + t.wasted, 'queries split into rank-raising and wasted').toBe(t.queries);
+
+  // The "no info" flag marks the zero vectors and nothing else.
+  const vectors = (await page.locator('#eq-list .eq .eq-body').allInnerTexts()).map((r) =>
+    capture(flat(r), /y = ([01]+)/, 'measured vector'),
+  );
+  expect(vectors).toHaveLength(t.queries);
+  expect(vectors.filter((v) => /^0+$/.test(v)).length, 'the y = 0 flag marks exactly the zero vectors').toBe(noInfo);
+
+  // The rank, on all four surfaces that report it.
+  expect(
+    await page.locator('#matrix-wrap .matrix-row').count(),
+    'the reduced matrix has one row per independent equation',
+  ).toBe(t.rank);
+  expect(await page.locator('#rank-meter span.filled').count(), 'filled meter segments = rank').toBe(t.rank);
+  expect(
+    await page.locator('#rank-meter').getAttribute('aria-label'),
+    'the meter announces the rank it paints, so a screen-reader user is told the same thing',
+  ).toBe(`Rank ${t.rank} of ${n - 1} needed`);
+  if (t.rank > 0) {
+    expect(await textOf(page.locator('.matrix-caption'))).toContain(`Rank ${t.rank} of ${n}`);
+  }
+
+  // The candidate count is forced: the null space holds 2^(n-rank) vectors, one
+  // of which is zero and therefore not a period.
+  const expected = Math.pow(2, n - t.rank) - 1;
+  if (t.queries === 0) expect(t.candidates).toBe(`${expected} (everything)`);
+  else if (expected === 0) expect(t.candidates).toBe('0 — none possible');
+  else expect(Number(t.candidates), 'candidates = 2^(n-rank) - 1').toBe(expected);
+  return t;
+}
+
+test('the counters split the queries they report, at every stage of a run', async ({ page }) => {
+  const n = 5;
+  await chooseTarget(page, 'even-mansour', 'Even-Mansour');
+  await chooseWidth(page, n);
+
+  const start = await assertCountersConsistent(page, n);
+  expect(start.queries).toBe(0);
+  expect(start.rank).toBe(0);
+
+  // Mid-run, after every single round, not merely at the end. Six rounds is
+  // deliberately past the four an n = 5 period needs, so the run can and often
+  // does finish inside this loop — which is why the loop reads the button's
+  // state rather than assuming it is still live.
+  for (let round = 1; round <= 6; round++) {
+    if (await page.locator('#measure').isDisabled()) break;
+    await page.locator('#measure').click();
+    await expect(page.locator('#eq-list .eq')).toHaveCount(round);
+    await assertCountersConsistent(page, n);
+  }
+
+  // Whichever way that ended, the run finishes at a verdict, and the counters
+  // are checked again there.
+  if (await page.locator('#run-all').isEnabled()) await runAll(page);
+  await expect(page.locator('#verdict')).toHaveClass(/is-broken/);
+  const end = await assertCountersConsistent(page, n);
+  expect(end.rank, 'the period is forced at rank n-1').toBe(n - 1);
+  expect(Number(end.candidates)).toBe(1);
+  expect(await textOf(page.locator('#verdict'))).toContain(
+    `${end.queries} ${end.queries === 1 ? 'query' : 'queries'} spent.`,
+  );
+});
+
+test('a candidate f refuses is reported as rejected and named, not quietly retried', async ({ page }) => {
+  const n = 4;
+  await chooseTarget(page, 'no-period', 'No period (control)');
+  await chooseWidth(page, n);
+
+  // Stepping one round at a time, the rank must pass through n-1 on its way to
+  // n, and at n-1 the system names exactly one candidate. Against an injective
+  // f that candidate cannot be a period, so this failure state is always
+  // reached — the demo's fail-closed rule made visible.
+  let reached = false;
+  for (let round = 1; round <= 40 && !reached; round++) {
+    await page.locator('#measure').click();
+    await expect(page.locator('#eq-list .eq')).toHaveCount(round);
+    reached = (await readTally(page)).rank === n - 1;
+  }
+  expect(reached, 'the rank passes through n-1').toBe(true);
+
+  await expect(page.locator('#verdict')).toHaveClass(/is-rejected/);
+  const verdict = await textOf(page.locator('#verdict'));
+  expect(verdict).toContain('Candidate rejected by f');
+  // The failure names its cause rather than just failing.
+  const named = capture(verdict, /The system named ([01, ]+), and f refused/, 'rejected candidate');
+  expect(verdict).toContain('f refused to confirm it');
+  expect(verdict).toContain('Simon’s algorithm is Las Vegas');
+
+  // The candidate named is the one the live system is still offering, and it is
+  // genuinely not a period: the exhaustive check below finds none at all.
+  const chips = (await page.locator('#cand-list .cand').allInnerTexts()).map(flat);
+  expect(chips, 'exactly one candidate survives at rank n-1').toHaveLength(1);
+  expect(named.split(', ')).toContain(chips[0]);
+  // Nothing is claimed recovered while a candidate stands rejected.
+  await expect(page.locator('#exploit')).toBeHidden();
+
+  // Rejection is not an end state — the run continues and the counters hold.
+  await expect(page.locator('#measure')).toBeEnabled();
+  await expect(page.locator('#run-all')).toBeEnabled();
+  await assertCountersConsistent(page, n);
+
+  await runAll(page);
+  await expect(page.locator('#verdict')).toHaveClass(/is-safe/);
+  expect(Number(capture(await textOf(page.locator('#exploit')), /periods that hold for all x ✓ (\d+)/, 'periods'))).toBe(
+    0,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// The grids, and the state that must not outlive its inputs
+// ---------------------------------------------------------------------------
+
+test('the interference grids account for every outcome, and the notes count what is drawn', async ({
+  page,
+}) => {
+  const n = 5;
+  await chooseTarget(page, 'even-mansour', 'Even-Mansour');
+  await chooseWidth(page, n);
+  await page.locator('#measure').click();
+  await expect(page.locator('#grid-before .amp-cell')).toHaveCount(1 << n);
+  await expect(page.locator('#grid-after .amp-cell')).toHaveCount(1 << n);
+
+  // Before the final Hadamard: the preimage size claimed is the number of cells
+  // actually painted as in-superposition.
+  const share = Number(
+    capture(await textOf(page.locator('#before-note')), /(\d+) inputs? share that value/, 'preimage size'),
+  );
+  expect(await page.locator('#grid-before .amp-cell:not(.empty)').count(), 'live cells = the preimage claimed').toBe(
+    share,
+  );
+  expect(share, 'a periodic f collapses to at least a pair').toBeGreaterThanOrEqual(2);
+  expect(share % 2, 'the preimage class is a union of s-cosets, so it is even').toBe(0);
+
+  // After: cancelled + surviving = every outcome, and the count claimed is drawn.
+  const cancelled = Number(
+    capture(await textOf(page.locator('#after-note')), /^(\d+) of \d+ outcomes cancelled/, 'cancelled count'),
+  );
+  const zero = await page.locator('#grid-after .amp-cell.zero').count();
+  const pos = await page.locator('#grid-after .amp-cell.pos').count();
+  const neg = await page.locator('#grid-after .amp-cell.neg').count();
+  expect(zero, 'the cancelled count is the number of zero cells').toBe(cancelled);
+  expect(zero + pos + neg, 'every outcome is classified exactly once').toBe(1 << n);
+  expect(await textOf(page.locator('#after-note'))).toContain(`of ${1 << n} outcomes cancelled`);
+  expect(zero, 'at least half of every outcome set is annihilated').toBeGreaterThanOrEqual(1 << (n - 1));
+
+  // Exactly one outcome is ringed as measured, and it is never a cancelled one:
+  // a zero-amplitude outcome is impossible, not merely unlikely.
+  await expect(page.locator('#grid-after .amp-cell.measured')).toHaveCount(1);
+  await expect(page.locator('#grid-after .amp-cell.measured.zero')).toHaveCount(0);
+  expect(
+    flat(await page.locator('#grid-after .amp-cell.measured .amp-y').innerText()),
+    'the ringed outcome is the one the equation log recorded',
+  ).toBe(capture(flat(await page.locator('#eq-list .eq').first().innerText()), /y = ([01]+)/, 'logged y'));
+});
+
+test('no verdict outlives the input it was computed from', async ({ page }) => {
+  const solve = async (): Promise<void> => {
+    await page.locator('#run-all').click();
+    await expect(page.locator('#verdict')).toHaveClass(/is-broken/, { timeout: 60_000 });
+    await expect(page.locator('#exploit')).toBeVisible();
+    // The verdict paints on the last round; the run formally ends a tick later.
+    await expect(page.locator('#run-hint')).toContainText('This run is finished');
+  };
+
+  const assertRetired = async (n: number): Promise<void> => {
+    expect(await textOf(page.locator('#verdict-text')), 'the stale verdict is gone').toBe('Not started');
+    await expect(page.locator('#verdict')).not.toHaveClass(/is-broken|is-safe|is-rejected/);
+    await expect(page.locator('#exploit'), 'the exploit panel does not outlive its run').toBeHidden();
+    await expect(page.locator('#eq-list .eq')).toHaveCount(0);
+    await expect(page.locator('#grid-after .amp-cell')).toHaveCount(0);
+    await expect(page.locator('#grid-before .amp-cell')).toHaveCount(0);
+    expect(await textOf(page.locator('#before-note'))).toBe('Run a measurement to populate this.');
+    expect(await textOf(page.locator('#arith-body'))).toBe('Pick a cell in either grid.');
+    expect(await textOf(page.locator('#run-hint'))).toContain('One press = one query');
+    await expect(page.locator('#measure')).toBeEnabled();
+    await expect(page.locator('#run-all')).toBeEnabled();
+    const t = await assertCountersConsistent(page, n);
+    expect(t.queries).toBe(0);
+    expect(t.rank).toBe(0);
+  };
+
+  // A new secret — the verdict described the key that has just been replaced.
+  await chooseTarget(page, 'even-mansour', 'Even-Mansour');
+  await solve();
+  const before = await textOf(page.locator('#secret-box'));
+  await page.locator('#peek').click();
+  await page.locator('#new-secret').click();
+  await expect(page.locator('#verdict-text')).toHaveText('Not started');
+  expect(await textOf(page.locator('#secret-box')), 'a new secret really is new').not.toBe(before);
+  await assertRetired(5);
+
+  // A target change — the verdict described a different function entirely.
+  await solve();
+  await chooseTarget(page, 'no-period', 'No period (control)');
+  await assertRetired(5);
+  expect(await textOf(page.locator('#consequence-text')), 'the consequence tracks the new target').toContain(
+    'Rank climbs to n instead of stopping at n−1',
+  );
+});
+
+test('no control is left dead by a completed run', async ({ page }) => {
+  await chooseTarget(page, 'even-mansour', 'Even-Mansour');
+  await runAll(page);
+
+  // Measure and run-all are disabled *because the run finished*, and the hint
+  // says so rather than leaving them silently dead.
+  await expect(page.locator('#run-hint')).toContainText('Reset the equations, or take a new secret');
+  await expect(page.locator('#measure')).toBeDisabled();
+  await expect(page.locator('#run-all')).toBeDisabled();
+
+  // Everything else stays live.
+  for (const id of ['peek', 'new-secret', 'reset', 'race-run']) {
+    await expect(page.locator(`#${id}`), `#${id} stays usable after a run`).toBeEnabled();
+  }
+  for (const b of await page.locator('#seg-target button, #seg-width button').all()) {
+    await expect(b).toBeEnabled();
+  }
+
+  await page.locator('#reset').click();
+  await expect(page.locator('#measure')).toBeEnabled();
+  await expect(page.locator('#run-all')).toBeEnabled();
+  await page.locator('#measure').click();
+  await expect(page.locator('#eq-list .eq')).toHaveCount(1);
+});
+
+/**
+ * The `[hidden]` override trap: the UA rule is only `[hidden] { display: none }`,
+ * which any author rule setting a display on the same element silently outranks.
+ * Both the secret box and the exploit panel ship the attribute, so every
+ * `el.hidden = true` on this page has to actually take the element off screen.
+ */
+test('no element with the hidden attribute is actually rendered', async ({ page }) => {
+  const leaks = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('[hidden]'))
+      .filter((el) => getComputedStyle(el as HTMLElement).display !== 'none')
+      .map((el) => ({
+        tag: (el as HTMLElement).tagName.toLowerCase(),
+        cls: (el as HTMLElement).className?.toString().slice(0, 60) ?? '',
+        display: getComputedStyle(el as HTMLElement).display,
+      })),
+  );
+  expect(leaks, `elements marked hidden that still render: ${JSON.stringify(leaks)}`).toEqual([]);
+
+  // And the attribute is load-bearing on both panels that rely on it.
+  await expect(page.locator('#secret-box')).toBeHidden();
+  await expect(page.locator('#exploit')).toBeHidden();
+  await page.locator('#peek').click();
+  await expect(page.locator('#secret-box')).toBeVisible();
+  expect(await page.locator('#peek').getAttribute('aria-expanded')).toBe('true');
+  await page.locator('#peek').click();
+  await expect(page.locator('#secret-box')).toBeHidden();
+  expect(await page.locator('#peek').getAttribute('aria-expanded')).toBe('false');
 });

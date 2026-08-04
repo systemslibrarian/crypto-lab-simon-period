@@ -182,7 +182,8 @@
             The standard answer to quantum computing in symmetric crypto is "double the key length and you're fine" —
             that answer comes from Grover, and it is only half the story. Simon's algorithm gives an
             <em>exponential</em> speedup against constructions with internal structure, and doubling the key does
-            nothing about it. Whole modes and MACs are broken outright, not weakened.
+            nothing about it. Whole modes and MACs are broken outright, not weakened — for an attacker who can query
+            the keyed primitive in superposition, which is a strong assumption and is taken apart under Limits below.
           </p>
         </aside>
       </header>
@@ -503,7 +504,9 @@
         <p class="panel-lede">
           Simon's algorithm is not a curiosity that happens to have a cryptographic application. Between 2010 and
           2016 it was turned into a general tool against symmetric constructions, and the pattern is always the same:
-          find a function built from the primitive whose period is the secret.
+          find a function built from the primitive whose period is the secret. The access assumed is also always the
+          same: every attack below needs superposition queries to the <em>keyed</em> primitive — the Q2 model, which
+          Limits takes apart.
         </p>
         <ul class="breaks" role="list">
           <li role="listitem" class="break-card break-live">

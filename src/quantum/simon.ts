@@ -24,7 +24,6 @@
 import { dot } from '../math/gf2';
 import {
   applyOracle,
-  cloneState,
   hadamardAllInputs,
   inputAmplitudes,
   inputMarginal,
@@ -77,13 +76,11 @@ export function simonRound(table: Uint32Array, n: number, m: number, u1: number,
   const preimage: number[] = [];
   for (let x = 0; x < 1 << n; x++) if (table[x] === collapsed.value) preimage.push(x);
 
-  const snapshot = cloneState(state);
   hadamardAllInputs(state); // step 4
   const after = inputAmplitudes(state, collapsed.value);
   const probabilities = inputMarginal(state);
   const measured = measureInput(state, u2);
 
-  void snapshot;
   return {
     n,
     observedOutput: collapsed.value,
@@ -167,10 +164,16 @@ export function verifyPeriod(table: Uint32Array, n: number, s: number): PeriodVe
  * How far the oracle is from Simon's textbook promise.
  *
  * The promise is that f is exactly 2-to-1 with f(x) = f(y) ⟺ y = x ⊕ s. Real
- * constructions collide by accident on top of that. The count of inputs living
- * in an oversized preimage class is exactly the probability that a round starts
- * from a superposition wider than two terms — which is where a non-orthogonal
- * measurement comes from.
+ * constructions collide by accident on top of that. `irregularInputs / 2^n` is
+ * the probability that a round starts from a superposition wider than two terms,
+ * because reading the output register returns a value with probability equal to
+ * its preimage's share of the domain.
+ *
+ * A wider superposition is NOT where a non-orthogonal measurement comes from —
+ * see `offPeriodMass`, which is exactly zero whenever s is a period at all. An
+ * oversized class is still a union of s-cosets, so every y with y·s = 1 still
+ * cancels. What it costs is uniformity: the surviving outcomes stop being spread
+ * evenly over s⊥, so more rounds are needed to reach rank n−1.
  */
 export interface PromiseReport {
   /** Distinct output values, and the size distribution of their preimages. */
