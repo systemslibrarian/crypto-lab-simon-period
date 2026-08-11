@@ -30,8 +30,12 @@ jobs:
         run: npm run build
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
-      - name: Accessibility gate (axe-core, WCAG A/AA, both themes)
-        run: npm run test:a11y
+      # Runs BOTH e2e specs. `test:a11y` used to be an alias for the entire
+      # Playwright suite; now that it is scoped to e2e/a11y.spec.ts, this step
+      # has to name the command that still covers the claims suite too, or
+      # splitting the scripts would have silently dropped it from deployment.
+      - name: Browser claims and accessibility gate (axe-core, WCAG A/AA, both themes)
+        run: npm run test:e2e
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

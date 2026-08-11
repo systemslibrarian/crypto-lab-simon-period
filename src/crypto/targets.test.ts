@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { candidatePeriods, dot, insert, newSystem } from '../math/gf2';
 import { offPeriodMass, promiseReport, simonDistribution, verifyPeriod } from '../quantum/simon';
 import { makeRng, quantumPeriodSearch } from '../classical/race';
+import { applyPerm, publicPermutation } from './prp';
 import {
   makeCbcMacTarget,
   makeEvenMansourTarget,
@@ -49,6 +50,34 @@ describe('KAT — Kuwakado & Morii 2012: Even-Mansour’s period is the whitenin
         for (let x = 0; x < 1 << n; x++) expect(t.table[x]).toBe(t.table[x ^ k1]);
       }
     }
+  });
+
+  it('k₁ is the ONLY period — a complete census over every k₁ at every shipped width', async () => {
+    // "k₁ is a period" is strictly weaker than what the page needs. A second
+    // independent period would make the period subspace at least 2-dimensional;
+    // the rank could then never reach n−1, candidatePeriods() would never narrow
+    // to one, and the run would end on "Out of budget … Reset and try again" —
+    // advice that could not work, offered as if the run had been unlucky.
+    //
+    // This is not a sample. publicPermutation(n) is fixed per width, and k₂ only
+    // XORs a constant into every table entry so it cannot affect periodicity,
+    // which makes k₁ the entire parameter space and 15 + 31 + 63 = 109 tables
+    // the whole census. It currently comes back clean, so the failure is latent;
+    // the test is here to keep the invariant if P is ever reseeded.
+    let censused = 0;
+    for (let n = 4; n <= 6; n++) {
+      const P = await publicPermutation(n);
+      const size = 1 << n;
+      for (let k1 = 1; k1 < size; k1++) {
+        const table = new Uint32Array(size);
+        for (let x = 0; x < size; x++) table[x] = applyPerm(P, x ^ k1) ^ applyPerm(P, x);
+        const periods: number[] = [];
+        for (let s = 1; s < size; s++) if (verifyPeriod(table, n, s).holds) periods.push(s);
+        expect(periods, `n=${n}, k₁=${k1}: the period must be unique for key recovery to be`).toEqual([k1]);
+        censused++;
+      }
+    }
+    expect(censused, 'every k₁ at n = 4, 5 and 6 was censused').toBe(15 + 31 + 63);
   });
 
   it('recovering the period yields both key halves and predicts a fresh block', async () => {

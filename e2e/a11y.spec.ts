@@ -20,7 +20,12 @@ async function chooseTarget(page: Page, id: string, name: string): Promise<void>
 async function chooseWidth(page: Page, n: number): Promise<void> {
   await page.locator(`#seg-width button[data-width="${n}"]`).click();
   await expect(page.locator(`#seg-width button[data-width="${n}"]`)).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('#rank-value')).toContainText(`/ ${n - 1} needed`);
+  // n−1 isolates a period; the control has none and its rank runs to n, so the
+  // threshold the meter prints is target-shaped.
+  const control = await page
+    .locator('#seg-target button[data-target="no-period"]')
+    .getAttribute('aria-pressed');
+  await expect(page.locator('#rank-value')).toContainText(`/ ${control === 'true' ? n : n - 1} needed`);
 }
 
 async function driveDemos(page: Page): Promise<void> {

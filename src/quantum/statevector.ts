@@ -4,12 +4,15 @@
  * Nothing here is a shortcut. The demo could have cheated — the output
  * distribution of Simon's algorithm on a perfectly 2-to-1 function is uniform
  * over s⊥, so you can "simulate" the whole thing with one line of sampling
- * code. That line would also lie, because the constructions this demo actually
- * attacks (Even-Mansour) do *not* satisfy the promise exactly: they collide by
- * accident on top of the period, and the true distribution is NOT uniform over
- * s⊥ — some orthogonal outcomes become far likelier than others, which is what
- * costs the extra queries. Only a real amplitude-level simulation reproduces
- * that, so that is what this is.
+ * code. That line would also lie for most Even-Mansour keys, because that
+ * construction usually does *not* satisfy the promise exactly: it collides by
+ * accident on top of the period, and the true distribution is then NOT uniform
+ * over s⊥ — some orthogonal outcomes become far likelier than others, which is
+ * what costs the extra queries. Only a real amplitude-level simulation
+ * reproduces that, so that is what this is. ("Usually", not always: whether a
+ * given k₁ yields an exactly 2-to-1 f is a fact about that key — a complete
+ * census over the fixed public P finds 2 of the 15 keys at n = 4 and 0 of 31 at
+ * n = 5 do — so the page computes it per instance rather than asserting it.)
  *
  * What does NOT change: every surviving outcome is still orthogonal to the
  * period. Whenever f(x) = f(x ⊕ s) everywhere, each preimage class is a union

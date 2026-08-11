@@ -67,13 +67,27 @@ async function chooseTarget(page: Page, id: string, name: string): Promise<void>
   );
 }
 
+/**
+ * The rank threshold the page is entitled to print, for the target currently
+ * selected: n−1 isolates a period, n proves there is none. The control's rank
+ * runs to n, so measuring it against an n−1 denominator printed "5 / 4 needed" —
+ * a requirement the run had already passed — and this suite used to assert that
+ * string verbatim rather than question it.
+ */
+async function rankGoal(page: Page, n: number): Promise<number> {
+  const control = await page
+    .locator('#seg-target button[data-target="no-period"]')
+    .getAttribute('aria-pressed');
+  return control === 'true' ? n : n - 1;
+}
+
 async function chooseWidth(page: Page, n: number): Promise<void> {
   await page.locator(`#seg-width button[data-width="${n}"]`).click();
   await expect(page.locator(`#seg-width button[data-width="${n}"]`)).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await expect(page.locator('#rank-value')).toContainText(`/ ${n - 1} needed`);
+  await expect(page.locator('#rank-value')).toContainText(`/ ${await rankGoal(page, n)} needed`);
 }
 
 /**
@@ -225,8 +239,13 @@ test('no-period control: the absence is proved exhaustively, not assumed from a 
   expect(verdict).toContain('NO PERIOD — nothing to find');
   expect(verdict).toContain(`The rank reached n = ${n}`);
   expect(verdict).toContain('That is a proof, not a timeout.');
-  // Rank n, one past the n−1 a period would have needed.
-  expect(await textOf(page.locator('#rank-value'))).toBe(`${n} / ${n - 1} needed`);
+  // The threshold this run was working toward is n, and the meter says n — it
+  // used to say `${n} / ${n - 1} needed`, printing a rank past a requirement it
+  // claimed was still outstanding. This assertion was the string that pinned it.
+  expect(await textOf(page.locator('#rank-value'))).toBe(`${n} / ${n} needed`);
+  expect(await textOf(page.locator('#rank-note'))).toContain(`Rank n = ${n}`);
+  expect(await textOf(page.locator('#rank-note'))).not.toContain('pinned once the rank reaches n−1');
+  expect(await page.locator('#rank-meter').getAttribute('aria-label')).toBe(`Rank ${n} of ${n} needed`);
 
   const exploit = await textOf(page.locator('#exploit'));
   expect(exploit).toContain('Confirmed: no period exists');
@@ -238,6 +257,130 @@ test('no-period control: the absence is proved exhaustively, not assumed from a 
   expect(exploit).toContain('Checked exhaustively against the function itself, not inferred');
   // No period means no exploit panel dressed as a break.
   await expect(page.locator('#exploit')).toHaveClass(/neutral/);
+});
+
+/**
+ * Regression — the interference panels described a periodic f while showing an
+ * injective one.
+ *
+ * Reading the output register of an injective f collapses the input register to
+ * a SINGLE basis state, so the final Hadamard spreads it evenly over every
+ * outcome and nothing cancels. Measured headless over the lab's own engine:
+ * 480 of 480 rounds at each of n = 4, 5, 6 against the control had preimage size
+ * 1 and zero cancelled outcomes. Both panels nonetheless printed prose written
+ * for a periodic target — the arithmetic panel took its "not a clean pair"
+ * branch and asserted that f "collided by accident on top of its period" and
+ * that "the cancellation still kills every y with y · s = 1", on the one target
+ * whose entire job is to show that there is no period and nothing cancels; the
+ * grid note announced "0 of 32 outcomes cancelled to exactly zero — they are
+ * impossible, not merely unlikely".
+ *
+ * The suite did not catch it because every test that reads these two panels
+ * selects Even-Mansour first, and their assertions — `share >= 2`,
+ * `share % 2 === 0`, `zero >= 2^(n-1)`, `paths.length >= 2` — are each false for
+ * the control. The scope was the defence.
+ */
+test('the control target is described as injective, not as a period the panels cannot see', async ({
+  page,
+}) => {
+  const n = 5;
+  await chooseTarget(page, 'no-period', 'No period (control)');
+  await chooseWidth(page, n);
+
+  let rounds = 0;
+  let singlePath = 0;
+  for (let i = 0; i < 8; i++) {
+    // Proving absence terminates the run at rank n, in ~6 rounds at n = 5, so
+    // keep going across resets rather than assuming the button stays live.
+    if (await page.locator('#measure').isDisabled()) {
+      await page.locator('#reset').click();
+      await expect(page.locator('#measure')).toBeEnabled();
+    }
+    await page.locator('#measure').click();
+    await expect(page.locator('#before-note')).toContainText('share that value');
+    rounds++;
+
+    // The state: one input in the superposition, nothing cancelled.
+    const share = Number(
+      capture(await textOf(page.locator('#before-note')), /(\d+) inputs? share that value/, 'preimage size'),
+    );
+    expect(share, 'an injective f has exactly one preimage per output').toBe(1);
+    expect(await page.locator('#grid-before .amp-cell:not(.empty)').count()).toBe(1);
+    expect(await page.locator('#grid-after .amp-cell.zero').count(), 'nothing cancels here').toBe(0);
+
+    // The claim: the grid note must not assert an impossibility about a set it
+    // just reported as empty.
+    const afterNote = await textOf(page.locator('#after-note'));
+    expect(afterNote, 'the note explains why nothing cancelled').toContain('None of the 32 outcomes cancelled');
+    expect(afterNote).not.toContain('they are impossible');
+
+    // The claim: the arithmetic panel has one path and must say so, without
+    // inventing a period, a coset structure, or a cancellation.
+    const arith = await textOf(page.locator('#arith-body'));
+    const paths = [...arith.matchAll(/x=([01]+) → ([+−-])1/g)];
+    expect(paths, 'the panel shows the one contributing path').toHaveLength(1);
+    singlePath++;
+    for (const forbidden of [
+      'collided by accident on top of its period',
+      'union of s-cosets',
+      'kills every y with y · s = 1',
+      'more than a clean pair',
+      'The paths reinforce',
+      'differ by exactly s',
+    ]) {
+      expect(arith, `the control's arithmetic panel must not claim: ${forbidden}`).not.toContain(forbidden);
+    }
+    expect(arith).toContain('only one contributing path');
+    expect(arith).toContain('a single term can never sum to zero');
+  }
+
+  // Non-vacuous: the state this test exists for has to have actually occurred,
+  // in every round, and there has to have been more than zero of them.
+  expect(rounds, 'rounds were actually driven').toBeGreaterThanOrEqual(8);
+  expect(singlePath, 'every round reached the single-path state under test').toBe(rounds);
+});
+
+/**
+ * The same two panels, on a periodic target, must keep their periodic prose —
+ * so the fix above is a branch and not a blanket rewrite. Even-Mansour collides
+ * by accident on top of its period often enough to reach both surviving
+ * branches: measured, 153 of 480 rounds at n = 4 and 198 of 480 at n = 6 have a
+ * preimage class larger than a clean pair.
+ */
+test('a periodic target still gets the interference prose written for it', async ({ page }) => {
+  const n = 5;
+  await chooseTarget(page, 'even-mansour', 'Even-Mansour');
+  await chooseWidth(page, n);
+
+  let pairRounds = 0;
+  let widerRounds = 0;
+  for (let i = 0; i < 30 && (pairRounds === 0 || widerRounds === 0); i++) {
+    if (await page.locator('#measure').isDisabled()) {
+      await page.locator('#reset').click();
+      await expect(page.locator('#measure')).toBeEnabled();
+    }
+    await page.locator('#measure').click();
+    await expect(page.locator('#before-note')).toContainText('share that value');
+    const share = Number(
+      capture(await textOf(page.locator('#before-note')), /(\d+) inputs? share that value/, 'preimage size'),
+    );
+    const arith = await textOf(page.locator('#arith-body'));
+    expect(await page.locator('#grid-after .amp-cell.zero').count(), 'at least half cancel').toBeGreaterThanOrEqual(
+      1 << (n - 1),
+    );
+    expect(await textOf(page.locator('#after-note'))).toContain('are impossible, not merely unlikely');
+    if (share === 2) {
+      expect(arith).toContain('The two inputs differ by exactly s');
+      pairRounds++;
+    } else {
+      expect(share, 'a periodic class is a union of s-cosets').toBeGreaterThan(2);
+      expect(arith).toContain('holds more than a clean pair');
+      widerRounds++;
+    }
+  }
+  // A test that hunts for a rare state must fail when it never turns up.
+  expect(pairRounds, 'the clean-pair branch was exercised').toBeGreaterThan(0);
+  expect(widerRounds, 'the accidental-collision branch was exercised').toBeGreaterThan(0);
 });
 
 // ---------------------------------------------------------------------------
@@ -558,6 +701,74 @@ test('against the control the classical attacker exhausts the domain, which is t
 });
 
 /**
+ * Regression — the race named an algorithm it had not run.
+ *
+ * Every row labelled its classical bar "birthday (classical)" and printed
+ * "birthday bound 2^(n/2) ≈ …" beside it. Against the control that is false in
+ * both halves: a permutation never collides, so `classicalPeriodSearch` finds
+ * no candidate at all and must read the whole domain. Measured headless: 0 of
+ * 40 trials found a period at each of n = 4, 5, 6, and the classical mean is
+ * exactly 2^n — 16.0, 32.0, 64.0 — against a quoted "bound" of 4.0, 5.7, 8.0.
+ * The row was labelling a proof of injectivity as a birthday search losing to
+ * quantum period-finding.
+ *
+ * The label is now decided by the runs (`classicalFoundPeriod > 0`), not by the
+ * target, so this asserts both branches: the control must not carry birthday
+ * language, and Even-Mansour must still carry it.
+ */
+test('no race row calls itself a birthday search unless a collision actually decided one', async ({
+  page,
+}) => {
+  await chooseTarget(page, 'no-period', 'No period (control)');
+  await page.locator('#race-run').click();
+  await expect(page.locator('#race-out .race-row')).toHaveCount(3, { timeout: 120_000 });
+  await expect(page.locator('#race-status')).toContainText('Done —', { timeout: 120_000 });
+
+  const controlRows = await page.locator('#race-out .race-row').allInnerTexts();
+  expect(controlRows, 'three widths were raced').toHaveLength(3);
+  controlRows.forEach((raw, i) => {
+    const row = flat(raw);
+    const n = [4, 5, 6][i]!;
+    // The row may explain that no birthday bound applies; what it must not do
+    // is quote one as this comparison's reference.
+    expect(row, `n=${n}: no birthday bound is quoted where no collision was found`).not.toContain(
+      'birthday bound 2^(n/2)',
+    );
+    expect(row, `n=${n}: the bar is not labelled birthday`).not.toContain('birthday (classical)');
+    expect(row, `n=${n}: the bar names what was actually run`).toContain('exhaustive (classical)');
+    expect(row).toContain('no collision found in any trial');
+    expect(row, `n=${n}: the zero count is stated, not implied`).toContain('in 0 of 40 trials');
+    expect(row).toContain(`had to read all ${1 << n} inputs`);
+    // The number behind the label: the classical side really did spend 2^n.
+    const classical = Number(capture(row, /exhaustive \(classical\) ([\d.]+)/, `classical mean n=${n}`));
+    expect(classical, `n=${n}: the mean is the whole domain`).toBe(1 << n);
+  });
+
+  // The other branch must survive: a target with a period to find is still a
+  // birthday search, and still says so.
+  await chooseTarget(page, 'even-mansour', 'Even-Mansour');
+  await page.locator('#race-run').click();
+  await expect(page.locator('#race-out .race-row')).toHaveCount(3, { timeout: 120_000 });
+  await expect(page.locator('#race-status')).toContainText('against Even-Mansour', { timeout: 120_000 });
+  const emRows = await page.locator('#race-out .race-row').allInnerTexts();
+  expect(emRows).toHaveLength(3);
+  emRows.forEach((raw, i) => {
+    const row = flat(raw);
+    const n = [4, 5, 6][i]!;
+    expect(row, `n=${n}: a real birthday search keeps its label`).toContain('birthday (classical)');
+    expect(row).toContain('birthday bound 2^(n/2)');
+    expect(row).not.toContain('exhaustive (classical)');
+    // The claim behind the label: a collision decided at least one trial, and
+    // the count printed is a real count.
+    const found = Number(capture(row, /candidate in (\d+) of 40 trials/, `collision trials n=${n}`));
+    expect(found, `n=${n}: the label is earned by trials that found one`).toBeGreaterThan(0);
+    expect(found).toBeLessThanOrEqual(40);
+    const classical = Number(capture(row, /birthday \(classical\) ([\d.]+)/, `classical mean n=${n}`));
+    expect(classical, `n=${n}: a birthday search stops well short of the domain`).toBeLessThan(1 << n);
+  });
+});
+
+/**
  * Regression — the race read `state.targetId` live inside its trial loop and
  * again when writing its caption, while the target selector stayed enabled
  * throughout. The loop yields the event loop between widths, so a switch landing
@@ -592,6 +803,76 @@ test('a target switch mid-race cannot retarget or relabel a run already under wa
   }
 });
 
+/**
+ * Regression — two exhibits on one page disagreeing about the same fact.
+ *
+ * The target card computes whether this instance of f satisfies Simon's promise
+ * exactly and prints the answer. The honesty panel asserted the opposite as a
+ * property of the construction: "the constructions attacked here do *not*
+ * satisfy the promise exactly". Whether they do is a fact about the drawn key,
+ * not about Even-Mansour. A complete census over the fixed public permutation —
+ * every one of the 15 possible k₁ at n = 4 — finds exactly 2 that make f
+ * exactly 2-to-1, so 13.3% of "New secret" presses at n = 4 put the card and the
+ * paragraph in flat contradiction.
+ *
+ * This hunts for that key and FAILS if it never turns up, so it cannot pass by
+ * never reaching the state it is about.
+ */
+test('the promise claim is computed per key, and nothing on the page overrides that row', async ({
+  page,
+}) => {
+  await chooseTarget(page, 'even-mansour', 'Even-Mansour');
+  await chooseWidth(page, 4);
+  await page.locator('#peek').click();
+  await expect(page.locator('#secret-box')).toBeVisible();
+
+  const contradictions = [
+    'do not satisfy the promise exactly',
+    'do *not* satisfy the promise exactly',
+    'does not satisfy the promise exactly',
+  ];
+
+  let exact = 0;
+  let colliding = 0;
+  for (let i = 0; i < 80 && (exact === 0 || colliding === 0); i++) {
+    const card = await textOf(page.locator('#secret-list'));
+    const honesty = await textOf(page.locator('#honesty'));
+    if (card.includes('promise exactly yes — exactly 2-to-1')) {
+      exact++;
+      // The moment of contradiction: the card says yes, so nothing else on the
+      // page may say no.
+      for (const c of contradictions) {
+        expect(honesty, `the card says this key IS exactly 2-to-1 while the page says: ${c}`).not.toContain(c);
+      }
+      expect(honesty, 'the global statement is hedged and points at the row that computes it').toContain(
+        'usually collides by accident',
+      );
+    } else {
+      expect(card, 'the card states the alternative rather than going silent').toContain('not a clean pair');
+      colliding++;
+    }
+    await page.locator('#new-secret').click();
+    await expect(page.locator('#verdict-text')).toHaveText('Not started');
+  }
+
+  expect(exact, 'an exactly-2-to-1 Even-Mansour key turned up (2 of the 15 keys at n = 4)').toBeGreaterThan(0);
+  expect(colliding, 'a colliding Even-Mansour key turned up').toBeGreaterThan(0);
+});
+
+/**
+ * The honesty panel described the simulator's storage as complex numbers. It is
+ * one `Float64Array` of real amplitudes — statevector.ts says so in its own
+ * header, and no gate in Simon's circuit has an imaginary entry to populate.
+ * A page whose honesty section misstates its own implementation is the one place
+ * that cannot afford to.
+ */
+test('the honesty panel describes the simulator the repo actually ships', async ({ page }) => {
+  const honesty = await textOf(page.locator('#honesty'));
+  expect(honesty, 'no imaginary component is stored').not.toContain('complex numbers');
+  expect(honesty).toContain('real amplitudes held in one Float64Array');
+  expect(honesty).toContain('There is no imaginary part');
+});
+
 // ---------------------------------------------------------------------------
 // The counters, and the failure paths
 // ---------------------------------------------------------------------------
@@ -624,7 +905,13 @@ async function readTally(page: Page): Promise<Tally> {
  */
 async function assertCountersConsistent(page: Page, n: number): Promise<Tally> {
   const t = await readTally(page);
-  expect(t.needed, 'the rank target is n-1').toBe(n - 1);
+  const goal = await rankGoal(page, n);
+  expect(t.needed, goal === n ? 'proving no period needs rank n' : 'isolating a period needs rank n-1').toBe(goal);
+  // The invariant behind the denominator, and the one the old constant hid: the
+  // page must never print a rank larger than the threshold it says is needed.
+  expect(t.rank, `rank ${t.rank} printed against a stated requirement of ${t.needed}`).toBeLessThanOrEqual(
+    t.needed,
+  );
 
   const flags = (await page.locator('#eq-list .eq .eq-flag').allInnerTexts()).map(flat);
   expect(flags.length, 'one equation logged per oracle query').toBe(t.queries);
@@ -652,7 +939,7 @@ async function assertCountersConsistent(page: Page, n: number): Promise<Tally> {
   expect(
     await page.locator('#rank-meter').getAttribute('aria-label'),
     'the meter announces the rank it paints, so a screen-reader user is told the same thing',
-  ).toBe(`Rank ${t.rank} of ${n - 1} needed`);
+  ).toBe(`Rank ${t.rank} of ${goal} needed`);
   if (t.rank > 0) {
     expect(await textOf(page.locator('.matrix-caption'))).toContain(`Rank ${t.rank} of ${n}`);
   }

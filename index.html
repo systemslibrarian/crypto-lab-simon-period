@@ -325,13 +325,16 @@
 
       <!-- ══ 2. INTERFERENCE ══════════════════════════════════════════════ -->
       <section class="panel" id="interference" aria-labelledby="interference-h">
-        <h2 id="interference-h">Why half the answers vanish</h2>
+        <h2 id="interference-h">Why at least half the answers vanish</h2>
         <p class="panel-lede">
           This is the whole trick, and it has no classical analogue. After the query, the machine holds every input
-          that shares the observed output — for a periodic function that is exactly a pair, <code>x₀</code> and
-          <code>x₀ ⊕ s</code>. The final Hadamard sends each of them down a path to <em>every</em> possible outcome
-          <code>y</code>, with a sign of <code>+</code> or <code>−</code>. Where the two signs disagree, the paths
-          cancel and that outcome becomes impossible.
+          that shares the observed output — for a function satisfying Simon's promise exactly that is a pair,
+          <code>x₀</code> and <code>x₀ ⊕ s</code>; a construction that collides by accident on top of its period can
+          leave a larger class, and an injective <code>f</code> leaves a single input and no interference at all. The
+          final Hadamard sends each surviving input down a path to <em>every</em> possible outcome <code>y</code>,
+          with a sign of <code>+</code> or <code>−</code>. Where the signs disagree, the paths cancel and that
+          outcome becomes impossible. Every <code>y</code> with <code>y · s = 1</code> cancels, which is half of
+          them; a larger preimage class can cancel more.
         </p>
 
         <div class="interf-grid">
@@ -357,8 +360,9 @@
         <div class="arith" id="arith">
           <h3 class="panel-h" id="arith-h">Do the arithmetic yourself</h3>
           <p class="panel-note">
-            Select any outcome above and both contributing paths are computed here, independently, and added. Nothing
-            is asserted — the sum on the right is the sum of the two numbers on the left.
+            Select any outcome above and <em>every</em> path contributing to it is computed here, independently, and
+            added — two for a clean pair, more where the function collided by accident, one where it is injective.
+            Nothing is asserted: the sum on the right is the sum of the numbers on the left.
           </p>
           <div class="arith-body" id="arith-body" role="status" aria-live="polite">
             <p class="panel-note">Pick a cell in either grid.</p>
@@ -421,9 +425,12 @@
       <section class="panel" id="race" aria-labelledby="race-h">
         <h2 id="race-h">Count the queries</h2>
         <p class="panel-lede">
-          Both sides below are <strong>measured, not plotted</strong>. The classical attacker runs a real birthday
-          collision search against the same function table the circuit queries; the quantum side runs complete Simon
-          rounds through the same simulator you have been pressing. Both count an oracle query the same way.
+          Both sides below are <strong>measured, not plotted</strong>. The classical attacker runs a real collision
+          search against the same function table the circuit queries; the quantum side runs complete Simon rounds
+          through the same simulator you have been pressing. Both count an oracle query the same way. Against a
+          periodic target that collision search is a birthday search and the row says so; against the control there
+          is no collision to find, the search reads the whole domain, and the row labels itself
+          <em>exhaustive</em> instead — the birthday bound governs neither side of that comparison.
         </p>
         <div class="race-controls">
           <button type="button" class="btn btn-secondary" id="race-run">Race them</button>
@@ -481,7 +488,10 @@
               <tr>
                 <th scope="row">The fix</th>
                 <td>Double the key length.</td>
-                <td>Doubling does nothing. Remove the structure or add rounds.</td>
+                <td>
+                  Doubling buys nothing exponential — Simon's cost is O(n), so twice the width is about twice the
+                  queries, not 2<sup>n</sup> times as many. Remove the structure.
+                </td>
                 <td>Replace the primitive outright — lattices, codes, hashes.</td>
               </tr>
               <tr>
@@ -566,20 +576,24 @@
         <h2 id="honesty-h">What this demo does not prove</h2>
         <ul class="honesty-list" role="list">
           <li role="listitem">
-            <strong>No quantum hardware is involved.</strong> Everything here is an exact classical statevector
-            simulation — real amplitudes, real Hadamards, a real unitary oracle, 2<sup>n+m</sup> complex numbers held
-            in a typed array. Exact does not mean scalable: the cost of this simulation doubles with every qubit,
-            which is precisely why a real quantum computer would be needed at cryptographic sizes.
+            <strong>No quantum hardware is involved.</strong> Everything here is a full classical statevector
+            simulation — real Hadamards, a real unitary oracle, 2<sup>n+m</sup> <em>real</em> amplitudes held in one
+            <code>Float64Array</code>. There is no imaginary part, because every gate in Simon's circuit has real
+            entries and nothing here ever populates one; the arithmetic in the panel above is literally the numbers in
+            that array. Accurate does not mean scalable: the cost of this simulation doubles with every qubit, which
+            is precisely why a real quantum computer would be needed at cryptographic sizes.
           </li>
           <li role="listitem">
-            <strong>The simulation is exact, and it is not a shortcut.</strong> For a function that satisfies Simon's
-            promise exactly, the algorithm's output distribution is uniform over <code>s⊥</code> and can be sampled
-            classically in one line — so a "simulation" of the textbook case is trivially exact and also teaches
-            nothing. This demo does not take that shortcut, because the constructions attacked here do
-            <em>not</em> satisfy the promise exactly: Even-Mansour's function collides by accident on top of its
-            period, which skews the distribution, and only an amplitude-level simulation reproduces that. What is
-            exact here is the linear algebra of the circuit itself — every Hadamard and the oracle are applied as
-            real unitaries to the full state.
+            <strong>The simulation is amplitude-level, and it is not a shortcut.</strong> For a function that
+            satisfies Simon's promise exactly, the algorithm's output distribution is uniform over <code>s⊥</code>
+            and can be sampled classically in one line — so a "simulation" of the textbook case teaches nothing.
+            This demo does not take that shortcut, because Even-Mansour's function usually collides by accident on
+            top of its period, which skews the distribution, and only an amplitude-level simulation reproduces that.
+            <em>Usually</em>, not always: whether a given key produces an exactly 2-to-1 function is a fact about that
+            key, so the target card computes it per instance and says so on the <em>satisfies Simon's promise
+            exactly</em> row rather than letting this paragraph assert it. (At n = 4 exactly 2 of the 15 possible
+            k₁ values do satisfy it.) What is exact here is the linear algebra of the circuit — every Hadamard and
+            the oracle are applied as real unitaries to the full state, to floating-point precision.
           </li>
           <li role="listitem">
             <strong>The Q2 model is a strong assumption.</strong> These attacks need the attacker to query the keyed

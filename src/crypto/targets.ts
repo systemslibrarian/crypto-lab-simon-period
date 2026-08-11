@@ -148,9 +148,15 @@ export async function makeTextbookTarget(n: number): Promise<Target> {
  * follows from a single classical evaluation. The 2^(n/2) security proof does
  * not survive contact with a quantum adversary who can query E in superposition.
  *
- * Note what is NOT weak here: P is a uniformly random permutation, the strongest
- * possible instantiation. The break is structural, not a property of the
- * permutation.
+ * Note what is NOT weak here: P is an unstructured pseudorandom permutation
+ * standing in for the ideal one the theorem assumes (see prp.ts on why it is not
+ * a uniform draw from the symmetric group). The break is structural, not a
+ * property of the permutation.
+ *
+ * P is also *fixed*: `publicPermutation(n)` derives one table per width from a
+ * constant seed and memoises it, which is how a published public permutation
+ * behaves. "New secret" and every race trial redraw k₁ and k₂ against that same
+ * P; they do not resample P.
  */
 export async function makeEvenMansourTarget(n: number): Promise<Target> {
   const P = await publicPermutation(n);

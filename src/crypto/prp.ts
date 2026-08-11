@@ -4,15 +4,21 @@
  *
  * The constructions this demo attacks are proved secure in the **ideal cipher**
  * and **random permutation** models, so the honest way to instantiate them at
- * teaching scale is not to shrink AES — it is to sample a permutation uniformly
- * at random and hand it out. That is exactly what happens here: a SHA-256
- * counter-mode stream (real WebCrypto, `crypto.subtle.digest`) drives a
- * Fisher-Yates shuffle of the whole domain, which for a 4–6 bit block is a
- * genuinely uniform random permutation, not an approximation of one.
+ * teaching scale is not to shrink AES — it is to hand out a permutation with no
+ * exploitable structure. A SHA-256 counter-mode stream (real WebCrypto,
+ * `crypto.subtle.digest`) drives an unbiased Fisher-Yates shuffle of the whole
+ * domain, with the swap indices drawn by rejection sampling so no index is
+ * skewed.
  *
- * The consequence matters for what the demo proves: Simon's attack on
- * Even-Mansour succeeds here *against an ideal permutation*, which is the
- * strongest possible target. There is no toy-cipher weakness doing the work.
+ * What this is NOT is a uniform draw from the full symmetric group. The stream
+ * is seeded by a 128-bit key, so at most 2^128 distinct tables are reachable,
+ * while there are 64! ≈ 2^296 permutations of a 6-bit domain — the overwhelming
+ * majority are unreachable by construction. Each table is *unbiased given the
+ * stream*; the family of tables is pseudorandom, not information-theoretically
+ * uniform. Nothing the demo shows depends on the difference (Simon's attack is
+ * structural and reads only f), but the claim is worth stating correctly: the
+ * theorem is about an ideal random permutation, and this is a representative
+ * pseudorandom toy table standing in for one.
  */
 
 const SEED_LABEL = new TextEncoder().encode('crypto-lab-simon-period/prp/v1');
@@ -91,9 +97,13 @@ function fromTable(n: number, table: Uint32Array): Permutation {
 }
 
 /**
- * Sample a uniformly random permutation on n bits, deterministically from
- * `key`. Fisher-Yates over the full domain: every one of the (2ⁿ)! orderings is
- * equally likely given a uniform stream.
+ * Derive a pseudorandom permutation on n bits, deterministically from `key`.
+ *
+ * Fisher-Yates over the full domain with rejection-sampled indices, so the
+ * shuffle itself is unbiased: given a uniform stream every one of the (2ⁿ)!
+ * orderings would be equally likely. The stream is not uniform, it is
+ * SHA-256(label ‖ key ‖ counter) from a 128-bit key — see the module header for
+ * why that means "pseudorandom table", not "uniformly sampled permutation".
  */
 export async function derivePermutation(n: number, key: Uint8Array): Promise<Permutation> {
   const size = 1 << n;

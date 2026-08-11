@@ -220,15 +220,34 @@ function renderTargetCard(): void {
 
 /* ── meters, tallies, verdict ─────────────────────────────────────────── */
 
+/**
+ * The rank threshold is target-shaped, not universal.
+ *
+ * Against a periodic f every measured y satisfies y·s = 0, so every row lands
+ * in s⊥ and the rank can never exceed n−1: n−1 is the finish line. The control
+ * has no period, its measurements span the whole space, and the rank runs to n
+ * — measured, 100 of 100 control runs at each of n = 4, 5, 6 end above n−1.
+ * Printing "5 / 4 needed" there stated a requirement the run had already blown
+ * past, and the e2e suite asserted that string rather than questioning it.
+ */
+function rankGoal(): number {
+  return state.targetId === 'no-period' ? state.n : state.n - 1;
+}
+
 function renderMeters(): void {
   const n = state.n;
   const r = rank(state.system);
-  el('rank-value').textContent = `${r} / ${n - 1} needed`;
+  const goal = rankGoal();
+  el('rank-value').textContent = `${r} / ${goal} needed`;
+  el('rank-note').textContent =
+    goal === n
+      ? `There is no period here to pin, so n−1 is not the threshold. Rank n = ${n} is: it leaves zero as the only vector orthogonal to everything measured, which is a proof of absence.`
+      : 'The period is pinned once the rank reaches n−1 — one dimension short of everything.';
 
   const meter = el('rank-meter');
   clear(meter);
-  meter.setAttribute('aria-label', `Rank ${r} of ${n - 1} needed`);
-  for (let i = 0; i < n; i++) {
+  meter.setAttribute('aria-label', `Rank ${r} of ${goal} needed`);
+  for (let i = 0; i < goal; i++) {
     const seg = make('span');
     if (i < r) seg.classList.add('filled');
     meter.appendChild(seg);
@@ -494,10 +513,23 @@ function renderInterference(): void {
   buildGrid(before, round.amplitudesBeforeFinalH, { kind: 'before' });
   buildGrid(after, round.amplitudesAfterFinalH, { kind: 'after', measured: round.measured });
 
+  // The count decides the sentence. Against the control f is injective, the
+  // output read collapses the input register to a single basis state, and the
+  // final Hadamard spreads it over every outcome with equal weight: nothing
+  // cancels at all. Measured, that is 480 of 480 rounds at each of n = 4, 5, 6.
+  // The old text printed "0 of 32 outcomes cancelled to exactly zero — they are
+  // impossible, not merely unlikely", asserting an impossibility about the empty
+  // set on the one target that exists to show the algorithm finding nothing.
+  const total = round.amplitudesAfterFinalH.length;
   const cancelled = [...round.amplitudesAfterFinalH].filter((a) => amplitudeSign(a) === '0').length;
   el('after-note').textContent =
-    `${cancelled} of ${round.amplitudesAfterFinalH.length} outcomes cancelled to exactly zero — they are impossible, ` +
-    `not merely unlikely. The measured outcome is ringed.`;
+    cancelled === 0
+      ? `None of the ${total} outcomes cancelled: this f is injective, so the read left a single input rather than a ` +
+        `coset, and a single path cannot interfere with itself. Every outcome stays possible — which is exactly why ` +
+        `the rank climbs to n and no period is found. The measured outcome is ringed.`
+      : `${cancelled} of ${total} outcomes cancelled — their contributing paths sum to zero exactly, so they are ` +
+        `impossible, not merely unlikely. (The float amplitudes land within 1e-12 of zero, and are classified by ` +
+        `that tolerance.) The measured outcome is ringed.`;
 }
 
 function renderArithmetic(): void {
@@ -532,14 +564,26 @@ function renderArithmetic(): void {
   const verdict = make('p', 'arith-verdict');
   verdict.textContent = kills
     ? 'The paths cancel exactly. This outcome has probability zero — the machine can never return it, which is what makes every measurement informative.'
-    : `The paths reinforce. This outcome survives, and measuring it would give the equation ${equationText(y, state.n)}.`;
+    : round.preimage.length === 1
+      ? `A single path has nothing to reinforce with and nothing to cancel against. This outcome survives, as every outcome does here, and measuring it would give the equation ${equationText(y, state.n)}.`
+      : `The paths reinforce. This outcome survives, and measuring it would give the equation ${equationText(y, state.n)}.`;
   body.appendChild(verdict);
 
+  // Three cases, not two. The old two-way branch sent everything that was not a
+  // clean pair down the "more than a clean pair, because f collided by accident
+  // on top of its period" sentence — and against the control the class holds
+  // exactly ONE input, in 480 of 480 measured rounds at each of n = 4, 5, 6.
+  // That sentence then asserted three things at once that are all false there:
+  // that the class is larger than a pair, that f has a period to collide on top
+  // of, and that the cancellation kills every y with y·s = 1. It said this on
+  // the one target whose whole job is to show the algorithm finding nothing.
   const why = make('p', 'arith-verdict');
   why.textContent =
-    round.preimage.length === 2
-      ? 'The two inputs differ by exactly s, so their signs disagree precisely when y · s = 1 — which is why every outcome that survives satisfies y · s = 0.'
-      : 'This preimage class holds more than a clean pair, because f collided by accident on top of its period. The class is still a union of s-cosets, so the cancellation still kills every y with y · s = 1.';
+    round.preimage.length === 1
+      ? 'There is only one contributing path, so there is nothing to interfere with: a single term can never sum to zero. That is what an injective f looks like from inside the circuit — no outcome is cancelled, every one of them stays possible, and the equations that come back span the whole space instead of a hyperplane.'
+      : round.preimage.length === 2
+        ? 'The two inputs differ by exactly s, so their signs disagree precisely when y · s = 1 — which is why every outcome that survives satisfies y · s = 0.'
+        : 'This preimage class holds more than a clean pair, because f collided by accident on top of its period. The class is still a union of s-cosets, so the cancellation still kills every y with y · s = 1.';
   body.appendChild(why);
 }
 
@@ -662,12 +706,22 @@ async function runRacePanel(): Promise<void> {
   for (const n of [4, 5, 6]) {
     let q = 0;
     let c = 0;
+    // Whether the classical side is doing a birthday search is a fact about the
+    // runs, not about the label: count the trials in which it actually found a
+    // period from a collision. Against the control that count is zero — measured,
+    // 0 of 40 at each of n = 4, 5, 6 — because a permutation never collides, so
+    // the search exhausts the domain and returns nothing. Labelling that bar
+    // "birthday (classical)" and printing a 2^(n/2) bound beside a measured 2^n
+    // named an algorithm the row had not run.
+    let cFound = 0;
     for (let i = 0; i < trials; i++) {
       const t = await makeTarget(racedId, n);
       q += quantumPeriodSearch(t.table, n, t.m, rng).queries;
-      c += classicalPeriodSearch(t.table, n, rng).queries;
+      const cr = classicalPeriodSearch(t.table, n, rng);
+      c += cr.queries;
+      if (cr.period !== null) cFound++;
     }
-    out.appendChild(renderRaceRow(n, q / trials, c / trials, trials));
+    out.appendChild(renderRaceRow(n, q / trials, c / trials, trials, cFound));
     status.textContent = `Completed n = ${n}…`;
     await wait(0);
   }
@@ -675,7 +729,17 @@ async function runRacePanel(): Promise<void> {
   btn.disabled = false;
 }
 
-function renderRaceRow(n: number, quantum: number, classical: number, trials: number): HTMLElement {
+function renderRaceRow(
+  n: number,
+  quantum: number,
+  classical: number,
+  trials: number,
+  classicalFoundPeriod: number,
+): HTMLElement {
+  // A birthday bound describes the cost of finding a collision. If no trial
+  // found one, quoting the bound and calling the bar "birthday" both describe an
+  // algorithm that did not run — the classical side proved injectivity instead.
+  const isBirthdaySearch = classicalFoundPeriod > 0;
   const row = make('div', 'race-row');
   const head = make('div', 'race-row-head');
   head.appendChild(make('h3', undefined, `n = ${n}  (domain 2^${n} = ${1 << n})`));
@@ -683,7 +747,9 @@ function renderRaceRow(n: number, quantum: number, classical: number, trials: nu
     make(
       'span',
       'race-ratio',
-      `classical / quantum = ${(classical / quantum).toFixed(2)}× · ${trials} trials · birthday bound 2^(n/2) ≈ ${Math.pow(2, n / 2).toFixed(1)}`,
+      isBirthdaySearch
+        ? `classical / quantum = ${(classical / quantum).toFixed(2)}× · ${trials} trials · birthday bound 2^(n/2) ≈ ${Math.pow(2, n / 2).toFixed(1)}`
+        : `classical / quantum = ${(classical / quantum).toFixed(2)}× · ${trials} trials · no collision found in any trial, so no birthday bound applies — the reference here is the whole domain, 2^${n} = ${1 << n}`,
     ),
   );
   row.appendChild(head);
@@ -691,7 +757,7 @@ function renderRaceRow(n: number, quantum: number, classical: number, trials: nu
   const max = Math.max(quantum, classical, 1);
   for (const [label, value, cls] of [
     ['Simon (quantum)', quantum, ''],
-    ['birthday (classical)', classical, 'classical'],
+    [isBirthdaySearch ? 'birthday (classical)' : 'exhaustive (classical)', classical, 'classical'],
   ] as const) {
     const bar = make('div', `race-bar ${cls}`.trim());
     bar.appendChild(make('span', 'bar-label', label));
@@ -707,7 +773,9 @@ function renderRaceRow(n: number, quantum: number, classical: number, trials: nu
     make(
       'p',
       'panel-note',
-      'Mean oracle queries. The quantum row is one query per Simon round; the classical row is one query per distinct input tried.',
+      isBirthdaySearch
+        ? `Mean oracle queries. The quantum row is one query per Simon round; the classical row is one query per distinct input tried. A collision gave the classical side its candidate in ${classicalFoundPeriod} of ${trials} trials.`
+        : `Mean oracle queries. The quantum row is one query per Simon round; the classical row is one query per distinct input tried. This f is injective, so it never collides: in 0 of ${trials} trials did the classical side find a period, and it had to read all ${1 << n} inputs to establish that. This row is a proof-of-absence comparison, not a period-finding race — the birthday bound governs neither side of it.`,
     ),
   );
   return row;
