@@ -11,7 +11,14 @@
   --panel: #191330;
   --panel-2: #211a3d;
   --border: #34295c;
-  --border-strong: #4d3d80;
+  /* WCAG 1.4.11. This token IS the control-boundary token and IS applied to the
+     controls — it was simply too dark to do the job: #4d3d80 measured 1.79:1
+     against the button's own --panel-2 fill and 1.95:1 against --panel, where
+     3:1 is required. (The light theme's value already cleared it, which is why
+     only the dark theme failed.) #7a63b8 keeps the violet family and measures
+     3.36:1 on the fill and 3.66:1 on the panel. */
+  --border-strong: #7a63b8;
+  --btn-solid-edge: #c9b3f0;  /* 4.03:1 on the dark accent fill */
 
   --text: #f2eefb;
   --text-dim: #cdc4e4;
@@ -55,7 +62,11 @@
   --panel: #ffffff;
   --panel-2: #f5f1fd;
   --border: #ddd4f0;
-  --border-strong: #a48ad0;
+  /* WCAG 1.4.11: #a48ad0 measured 2.65:1 against .btn-secondary's --panel-2 fill
+     (#f5f1fd), under the 3:1 a control boundary needs. #8f74c4 is 3.46:1 there
+     and 3.84:1 on the white page. */
+  --border-strong: #8f74c4;
+  --btn-solid-edge: #c9b3f0;  /* 3.79:1 on the light accent fill */
 
   --text: #17102a;
   --text-dim: #3d3358;
@@ -291,9 +302,15 @@ body {
   border-color: var(--border);
   background-color: var(--bg-2);
 }
+/* WCAG 1.4.11. This button's border was painted the SAME colour as its own
+   accent fill, so it had no boundary of its own — 1:1 — and its only delineator
+   was the fill against the page, which measured 2.36:1 dark / 2.95:1 light.
+   `--accent` itself cannot be lightened to fix that: the shared top bar reads
+   `--accent`, so changing it moves the header's own boundary. A dedicated edge
+   token solves the button without touching the bar. */
 #app .btn-primary {
   background-color: var(--accent-fill);
-  border-color: var(--accent-fill);
+  border-color: var(--btn-solid-edge);
   color: var(--accent-ink);
 }
 #app .btn-primary:hover:not(:disabled) {
@@ -303,7 +320,12 @@ body {
 }
 #app .btn-secondary {
   background-color: var(--panel-2);
-  border-color: var(--accent-line);
+  /* --border-strong, not --accent-line. `--accent-line` is a decorative accent
+     rule (a divider/underline colour), and in the dark theme it is #4a2f7a —
+     1.55:1 against this button's own --panel-2 fill, where SC 1.4.11 needs 3:1.
+     This is the control-boundary token the base `.btn` already uses; the
+     secondary variant was overriding it with a decorative one. 3.36:1. */
+  border-color: var(--border-strong);
 }
 #app .btn-lg {
   padding: 0.7rem 1.3rem;
@@ -450,9 +472,16 @@ body {
   border-color: var(--accent);
   color: var(--text);
 }
+/* WCAG 1.4.11. The SELECTED segment was painted entirely in --accent — border
+   and fill the same colour — so it had no boundary of its own (1:1) and its only
+   delineator was the accent fill against the page: 2.17:1 in dark, under the 3:1
+   a control boundary needs. This is the state that most needs to be
+   distinguishable, since it is what tells the reader which mode is active.
+   --accent cannot be lightened to fix it, because the shared top bar reads
+   --accent; the dedicated edge token does the job without touching the bar. */
 .seg button[aria-pressed='true'] {
   background-color: var(--accent-fill);
-  border-color: var(--accent-fill);
+  border-color: var(--btn-solid-edge);
   color: var(--accent-ink);
   font-weight: 700;
 }
