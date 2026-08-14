@@ -120,7 +120,7 @@ export async function makeTextbookTarget(n: number): Promise<Target> {
           { label: 'true s', value: hex(s, n), match: ok ? 'ok' : 'bad' },
         ],
         note: ok
-          ? 'The linear system pinned s from measurements alone. Nothing about f was searched, guessed, or brute-forced.'
+          ? 'The linear system pinned s from measurements alone. Nothing about f was searched, guessed, or brute-forced — the full-domain check in the verdict above is verification of the answer, not how the answer was found.'
           : 'The system solved to a value that does not satisfy f(x) = f(x ⊕ s). Discard and re-run — Simon’s algorithm is Las Vegas, and this is why the demo verifies.',
       };
     },
@@ -340,7 +340,9 @@ export async function makeCbcMacTarget(n: number): Promise<Target> {
    ──────────────────────────────────────────────────────────────────────────── */
 
 /**
- * A uniformly random permutation. It is 1-to-1, so it has no period at all, and
+ * A pseudorandom permutation — a fresh key into `derivePermutation`, so
+ * "random" in the same qualified sense as everything in prp.ts, not a uniform
+ * draw from the symmetric group. It is 1-to-1, so it has no period at all, and
  * Simon's algorithm is honest about that: with f injective, reading the output
  * register collapses the input register to a single basis state, the final
  * Hadamard spreads it uniformly over *all* 2ⁿ outcomes, and the collected

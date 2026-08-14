@@ -12,20 +12,20 @@
     <title>Simon's Period — crypto-lab</title>
     <meta
       name="description"
-      content="Simon's algorithm in the browser — an exact statevector simulation recovering the hidden period of Even-Mansour and CBC-MAC in O(n) quantum queries."
+      content="Simon's algorithm in the browser — a full statevector simulation, accurate to floating-point precision, recovering the hidden period of Even-Mansour and CBC-MAC in O(n) quantum queries."
     />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Simon's Period — crypto-lab" />
     <meta
       property="og:description"
-      content="Simon's algorithm in the browser — an exact statevector simulation recovering the hidden period of Even-Mansour and CBC-MAC in O(n) quantum queries."
+      content="Simon's algorithm in the browser — a full statevector simulation, accurate to floating-point precision, recovering the hidden period of Even-Mansour and CBC-MAC in O(n) quantum queries."
     />
     <meta property="og:url" content="https://systemslibrarian.github.io/crypto-lab-simon-period/" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="Simon's Period — crypto-lab" />
     <meta
       name="twitter:description"
-      content="Simon's algorithm in the browser — an exact statevector simulation recovering the hidden period of Even-Mansour and CBC-MAC in O(n) quantum queries."
+      content="Simon's algorithm in the browser — a full statevector simulation, accurate to floating-point precision, recovering the hidden period of Even-Mansour and CBC-MAC in O(n) quantum queries."
     />
     <link
       rel="icon"
@@ -186,8 +186,9 @@
           <p class="cl-hero-why-text">
             The standard answer to quantum computing in symmetric crypto is "double the key length and you're fine" —
             that answer comes from Grover, and it is only half the story. Simon's algorithm gives an
-            <em>exponential</em> speedup against constructions with internal structure, and doubling the key does
-            nothing about it. Whole modes and MACs are broken outright, not weakened — for an attacker who can query
+            <em>exponential</em> speedup against constructions with internal structure, and doubling the width only
+            about doubles its cost — no key length restores exponential security. Whole modes and MACs are broken
+            outright, not weakened — for an attacker who can query
             the keyed primitive in superposition, which is a strong assumption and is taken apart under Limits below.
           </p>
         </aside>
@@ -226,7 +227,8 @@
             Pick a target. Each press of <strong>Measure</strong> runs one complete round of the circuit — one
             superposition query to the function, one interference step, one measurement — and hands you a single
             linear equation about the hidden period. Collect enough independent equations and the period is forced.
-            Nothing is searched, nothing is guessed.
+            Nothing is searched, nothing is guessed — the candidate falls out of the equations, and is then checked
+            against f before anything is claimed.
           </p>
         </div>
 
@@ -241,7 +243,8 @@
             <legend>Input width n</legend>
             <div class="seg" id="seg-width" role="group" aria-label="Input width in bits"></div>
             <p class="seg-note">
-              The whole domain is 2<sup>n</sup> inputs. Small enough to simulate exactly; the algorithm does not care.
+              The whole domain is 2<sup>n</sup> inputs. The algorithm's query count grows linearly with n; it is this
+              classical simulator whose memory and runtime double with every extra bit.
             </p>
           </fieldset>
         </div>
@@ -365,9 +368,11 @@
         <div class="arith" id="arith">
           <h3 class="panel-h" id="arith-h">Do the arithmetic yourself</h3>
           <p class="panel-note">
-            Select any outcome above and <em>every</em> path contributing to it is computed here, independently, and
-            added — two for a clean pair, more where the function collided by accident, one where it is injective.
-            Nothing is asserted: the sum on the right is the sum of the numbers on the left.
+            Select an outcome in the <em>after</em> grid and <em>every</em> path contributing to it is computed here,
+            independently, and added — two for a clean pair, more where the function collided by accident, one where
+            it is injective. Nothing is asserted: the sum on the right is the sum of the numbers on the left. A cell
+            in the <em>before</em> grid is an input, not an outcome, so selecting one explains what the collapse did
+            to that input instead.
           </p>
           <div class="arith-body" id="arith-body" role="status" aria-live="polite">
             <p class="panel-note">Pick a cell in either grid.</p>
@@ -462,6 +467,12 @@
             difference, because √64 is small. The exponent is the whole story: at n = 128 the classical attacker needs
             about 2⁶⁴ ≈ 1.8 × 10¹⁹ queries and Simon needs roughly 130. The demo runs at a size you can watch, and
             the growth rates are what carry over.
+          </p>
+          <p>
+            130 queries does not mean 130 cheap operations. Each one is a coherent execution of the full keyed
+            construction on a quantum computer — a reversible circuit for the cipher, with its gate count, depth and
+            error-correction overhead, none of which this page models or counts. Query complexity is the quantity
+            with the theorem attached; it is not gate complexity, and it is not wall-clock time.
           </p>
         </details>
       </section>
@@ -584,7 +595,8 @@
             subkeys, a key schedule that is not self-similar, domain separation so that no attacker-controlled
             function of the primitive is periodic, and modes whose masks are not simple XOR offsets. A pseudorandom
             permutation with no exploitable structure has no period to find, which is exactly what the control target
-            on this page demonstrates.
+            on this page demonstrates. None of these is a proof on its own — each removes the particular structure
+            the known attacks ride on, and a construction is only Q2-secure once it has been analysed in that model.
           </p>
         </div>
       </section>
@@ -598,8 +610,12 @@
             simulation — real Hadamards, a real unitary oracle, 2<sup>n+m</sup> <em>real</em> amplitudes held in one
             <code>Float64Array</code>. There is no imaginary part, because every gate in Simon's circuit has real
             entries and nothing here ever populates one; the arithmetic in the panel above is literally the numbers in
-            that array. Accurate does not mean scalable: the cost of this simulation doubles with every qubit, which
-            is precisely why a real quantum computer would be needed at cryptographic sizes.
+            that array. The oracle itself is a shortcut a real attacker does not get: the browser evaluates f's
+            complete 2<sup>n</sup>-entry truth table up front and implements <code>U_f</code> as a table lookup,
+            where a real Q2 attack would need a reversible quantum circuit for the keyed primitive — that circuit's
+            synthesis and gate cost are not modelled or counted here. Accurate does not mean scalable: the cost of
+            this simulation doubles with every qubit, which is precisely why a real quantum computer would be needed
+            at cryptographic sizes.
           </li>
           <li role="listitem">
             <strong>The simulation is amplitude-level, and it is not a shortcut.</strong> For a function that
@@ -615,8 +631,10 @@
           </li>
           <li role="listitem">
             <strong>The Q2 model is a strong assumption.</strong> These attacks need the attacker to query the keyed
-            primitive <em>in superposition</em> — to hand a quantum device the secret key and ask it to encrypt a
-            superposition of plaintexts. No deployed system offers that today, and it may never be offered. Some of
+            primitive <em>in superposition</em>: coherent black-box access to an oracle that encrypts (or MACs) a
+            superposition of inputs and hands back the quantum state. The key never leaves the oracle — but someone
+            must have implemented the keyed primitive on a quantum device the attacker can query coherently. No
+            deployed system offers that today, and it may never be offered. Some of
             these attacks have weaker Q1 variants; most do not. The demo shows what breaks <em>if</em> that access
             exists, and that is the honest framing.
           </li>

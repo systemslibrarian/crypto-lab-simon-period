@@ -1,5 +1,6 @@
 /**
- * An exact statevector simulator, big enough for Simon's algorithm on 4–6 bits.
+ * A full statevector simulator — amplitude-level, accurate to floating-point
+ * precision — big enough for Simon's algorithm on 4–6 bits.
  *
  * Nothing here is a shortcut. The demo could have cheated — the output
  * distribution of Simon's algorithm on a perfectly 2-to-1 function is uniform

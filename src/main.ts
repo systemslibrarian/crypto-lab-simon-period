@@ -54,6 +54,19 @@ interface Measurement {
   accepted: boolean;
 }
 
+/**
+ * What the arithmetic panel is pointed at. The two grids hold different kinds
+ * of thing — a before-grid cell is an input basis state x, an after-grid cell
+ * is a measurement outcome y — and the panel used to treat every click as an
+ * outcome, silently relabelling an input x as "Outcome y = x". The kind is
+ * carried with the selection so the panel can only ever describe what was
+ * actually clicked.
+ */
+interface Selection {
+  kind: 'input' | 'outcome';
+  value: number;
+}
+
 interface State {
   targetId: TargetId;
   n: number;
@@ -62,7 +75,7 @@ interface State {
   measurements: Measurement[];
   rejectedCandidates: number[];
   lastRound: SimonRound | null;
-  selectedY: number | null;
+  selected: Selection | null;
   status: Status;
   solved: { period: number; exploit: ExploitResult } | null;
   busy: boolean;
@@ -76,7 +89,7 @@ const state: State = {
   measurements: [],
   rejectedCandidates: [],
   lastRound: null,
-  selectedY: null,
+  selected: null,
   status: 'idle',
   solved: null,
   busy: false,
@@ -304,10 +317,14 @@ function verdictSpec(): VerdictSpec {
         cls: breaks ? 'is-broken' : 'is-working',
         icon: breaks ? '⚠' : '✓',
         text: breaks ? `BROKEN — period s = ${toBits(s, n)}` : `Period recovered — s = ${toBits(s, n)}`,
-        sub: `Verified against f over all ${1 << n} inputs: f(x) = f(x ⊕ s) everywhere. ${plural(
+        // Two costs, kept apart on purpose: the query tally counts only the
+        // superposition queries the attack spent, while the full-domain check
+        // is this page grading its own answer — 2^n classical table reads that
+        // a real attacker would not need and the tally must not absorb.
+        sub: `Verified against f over all ${1 << n} inputs: f(x) = f(x ⊕ s) everywhere — the page checking its answer, not counted below. ${plural(
           state.measurements.length,
-          'query',
-          'queries',
+          'superposition query',
+          'superposition queries',
         )} spent.${qualifier}`,
       };
     }
@@ -473,7 +490,10 @@ function buildGrid(
     const cell = make('button', `amp-cell ${opts.kind === 'before' && cls === 'zero' ? 'empty' : cls}`);
     cell.type = 'button';
     if (opts.measured === x) cell.classList.add('measured');
-    if (state.selectedY === x && opts.kind === 'after') cell.classList.add('selected');
+    const kindHere: Selection['kind'] = opts.kind === 'before' ? 'input' : 'outcome';
+    if (state.selected?.kind === kindHere && state.selected.value === x) {
+      cell.classList.add('selected');
+    }
 
     const glyph = make('span', 'amp-sign', opts.kind === 'before' && cls === 'zero' ? '·' : sign);
     const label = make('span', 'amp-y', bits(x, state.n));
@@ -489,7 +509,7 @@ function buildGrid(
     cell.setAttribute('aria-label', name);
     cell.title = name;
     cell.addEventListener('click', () => {
-      state.selectedY = x;
+      state.selected = { kind: kindHere, value: x };
       renderInterference();
       renderArithmetic();
     });
@@ -532,15 +552,49 @@ function renderInterference(): void {
         `that tolerance.) The measured outcome is ringed.`;
 }
 
+/**
+ * The input-side reading of the panel: what one before-grid cell x IS, stated
+ * in input terms. The outcome arithmetic makes no sense for it — x is not a y,
+ * and (−1)^(x·y) is not defined until an outcome is chosen — so the panel says
+ * what the collapse did to this input instead.
+ */
+function renderInputExplanation(body: HTMLElement, round: SimonRound, x: number): void {
+  const n = state.n;
+  const observed = bits(round.observedOutput, state.target!.m);
+  const intro = make('p', 'panel-note');
+  intro.textContent =
+    `Input x = ${bits(x, n)} — a before-grid cell, so this is a basis state of the input register, not a measurement outcome.`;
+  body.appendChild(intro);
+
+  const verdict = make('p', 'arith-verdict');
+  verdict.textContent = round.preimage.includes(x)
+    ? `f(${bits(x, n)}) equals the observed output ${observed}, so this input survived the collapse: it is one of the ` +
+      `${plural(round.preimage.length, 'input')} the machine still holds, and the final Hadamard sends it down one ` +
+      `signed path (−1)^(x·y) to every outcome. Pick a cell in the after-grid to see those paths summed for a ` +
+      `particular y.`
+    : `f(${bits(x, n)}) is not the observed output ${observed}, so reading the output register removed this input ` +
+      `from the superposition. It contributes no path to any outcome.`;
+  body.appendChild(verdict);
+}
+
 function renderArithmetic(): void {
   const body = el('arith-body');
   clear(body);
   const round = state.lastRound;
-  const y = state.selectedY;
-  if (!round || y === null) {
+  const sel = state.selected;
+  if (!round || sel === null) {
     body.appendChild(make('p', 'panel-note', 'Pick a cell in either grid.'));
     return;
   }
+
+  // A before-grid cell is an input basis state x, not an outcome. Treating a
+  // click there as "Outcome y" silently changed the number's semantic role, so
+  // an input click gets its own explanation instead of the per-outcome sum.
+  if (sel.kind === 'input') {
+    renderInputExplanation(body, round, sel.value);
+    return;
+  }
+  const y = sel.value;
 
   const intro = make('p', 'panel-note');
   intro.textContent = `Outcome y = ${bits(y, state.n)}. Each input still in the superposition contributes a term (−1)^(x · y):`;
@@ -592,7 +646,7 @@ function renderArithmetic(): void {
 function applyMeasurement(round: SimonRound): void {
   const t = state.target!;
   state.lastRound = round;
-  state.selectedY = round.measured;
+  state.selected = { kind: 'outcome', value: round.measured };
 
   const res = insert(state.system, round.measured);
   state.system = res.system;
@@ -798,7 +852,7 @@ function resetRun(): void {
   state.measurements = [];
   state.rejectedCandidates = [];
   state.lastRound = null;
-  state.selectedY = null;
+  state.selected = null;
   state.status = 'idle';
   state.solved = null;
   renderCircuit(-1);

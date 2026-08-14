@@ -147,8 +147,12 @@ test('even-mansour: the recovered key is the held key, and it reproduces the cip
   expect(verdict).toContain('Broken in the Q2 model only');
   expect(verdict).toContain('superposition query to the keyed primitive');
 
-  // The queries the verdict counts are the equations the log holds.
-  const queries = Number(capture(verdict, /(\d+) quer(?:y|ies) spent/, 'query count'));
+  // The queries the verdict counts are the equations the log holds — and the
+  // count is labelled as superposition queries, because the full-domain
+  // verification the same sentence describes is classical table reads the
+  // tally deliberately excludes.
+  const queries = Number(capture(verdict, /(\d+) superposition quer(?:y|ies) spent/, 'query count'));
+  expect(verdict).toContain('not counted below');
   await expect(page.locator('#eq-list .eq')).toHaveCount(queries);
 
   // Rank reached exactly what the page said it needed.
@@ -474,6 +478,43 @@ test('interference: the grid cancels exactly the outcomes with y·s = 1, and the
   expect(live.text).toContain('This outcome survives');
   await expect(page.locator('.arith-result.lives')).toBeVisible();
   await expect(page.locator('.arith-result.kills')).toHaveCount(0);
+});
+
+/**
+ * A before-grid cell is an input basis state x; only the after-grid holds
+ * measurement outcomes y. The panel used to run the outcome arithmetic on
+ * whatever was clicked, so selecting input x silently relabelled it
+ * "Outcome y = x" — the same bits under a different semantic role, with an
+ * implied equation about a vector that was never measured. An input click now
+ * gets an input explanation, and the outcome arithmetic stays where the
+ * outcomes are.
+ */
+test('a before-grid click is explained as an input, never relabelled as an outcome', async ({
+  page,
+}) => {
+  await page.locator('#measure').click();
+  await expect(page.locator('#eq-list .eq')).toHaveCount(1);
+
+  // A surviving input — one of the preimage the collapse kept.
+  await page.locator('#grid-before .amp-cell:not(.empty)').first().click();
+  let arith = await textOf(page.locator('#arith-body'));
+  expect(arith).toContain('Input x =');
+  expect(arith).toContain('survived the collapse');
+  expect(arith, 'an input must not be presented as an outcome').not.toContain('Outcome y =');
+  await expect(page.locator('.arith-result')).toHaveCount(0);
+
+  // A removed input — f(x) is not the observed output.
+  await page.locator('#grid-before .amp-cell.empty').first().click();
+  arith = await textOf(page.locator('#arith-body'));
+  expect(arith).toContain('Input x =');
+  expect(arith).toContain('removed this input');
+  expect(arith).not.toContain('Outcome y =');
+
+  // An after-grid click still runs the per-outcome arithmetic.
+  await page.locator('#grid-after .amp-cell').first().click();
+  arith = await textOf(page.locator('#arith-body'));
+  expect(arith).toContain('Outcome y =');
+  expect(arith).not.toContain('Input x =');
 });
 
 test('the linear system: every measured equation satisfies y·s = 0, and the rank only grows', async ({
@@ -981,7 +1022,7 @@ test('the counters split the queries they report, at every stage of a run', asyn
   expect(end.rank, 'the period is forced at rank n-1').toBe(n - 1);
   expect(Number(end.candidates)).toBe(1);
   expect(await textOf(page.locator('#verdict'))).toContain(
-    `${end.queries} ${end.queries === 1 ? 'query' : 'queries'} spent.`,
+    `${end.queries} superposition ${end.queries === 1 ? 'query' : 'queries'} spent.`,
   );
 });
 
