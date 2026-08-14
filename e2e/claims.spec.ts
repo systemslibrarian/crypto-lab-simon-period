@@ -18,11 +18,24 @@ test.beforeEach(async ({ page }) => {
   const errors: string[] = [];
   pageErrors.set(page, errors);
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+  // Ask for reduced motion the way a reader does, rather than forcing it with
+  // an injected style tag. This lab's own `@media (prefers-reduced-motion:
+  // reduce)` block collapses every duration to 0.001ms, and `main.ts` reads
+  // the same media query to drop its 110ms/90ms step delays to zero — so the
+  // flake control is identical, but it now comes from the page instead of from
+  // the test, which means this suite exercises the rendering a reduced-motion
+  // visitor actually gets AND fails if either path ever stops working. Applied
+  // imperatively before the navigation because `test.use({ reducedMotion })`
+  // silently does nothing on Playwright 1.61.1, and asserted from inside the
+  // page because a silent no-op would put every run back on a 110ms-per-step
+  // animation without saying so.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('.');
+  expect(
+    await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches),
+    'reduced-motion emulation must actually be in effect',
+  ).toBe(true);
   await expect(page.locator('#run-all')).toBeVisible();
-  await page.addStyleTag({
-    content: `*,*::before,*::after{animation:none!important;transition:none!important}`,
-  });
 });
 
 test.afterEach(async ({ page }) => {
@@ -103,6 +116,11 @@ async function runAll(page: Page): Promise<void> {
   await expect(page.locator('#verdict')).toContainText(/BROKEN|Period recovered|NO PERIOD/, {
     timeout: 60_000,
   });
+  // The run paints this content in while animating — under the reduced motion
+  // this suite requests, both must still land in their visible end state, so
+  // the suite fails if the reduced-motion path ever stops restoring it.
+  await expect(page.locator('#verdict')).toBeVisible();
+  await expect(page.locator('#grid-after .amp-cell').first()).toBeVisible();
 }
 
 /** The after-measurement grid: each outcome's bit label and whether it cancelled. */
