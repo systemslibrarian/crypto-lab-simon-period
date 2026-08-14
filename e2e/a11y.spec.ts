@@ -1,150 +1,86 @@
-import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
-
-const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
+import { expect, test } from '@playwright/test';
+import {
+  boot,
+  driveAllStates,
+  expectBaselineNotStale,
+  NARROW,
+  reportCollected,
+  watchPageErrors,
+} from './gate';
 
 /**
- * Axe only checks what is in the DOM, so an unscanned state is an ungated
- * state. This walks every exhibit into the states a visitor can actually
- * reach — all four targets, all three widths, the recovered-period verdict, the
- * proved-no-period verdict, the secret reveal, the interference grids, the
- * per-outcome arithmetic in both its cancelled and surviving forms, and the
- * measured race — before anything is scanned.
+ * WCAG A/AA regression gate for Simon's Period.
+ *
+ * FOUR CONFIGURATIONS: {dark, light} x {1280, 380}. Each boots the page fresh,
+ * asserts the shipped defaults, and drives the whole lab, scanning after EVERY
+ * step: the arrival state, where nothing has been measured, both grids are
+ * empty, the equation log reads "No measurements yet.", the secret and exploit
+ * panels are behind the `hidden` attribute and both expert disclosures are shut;
+ * the skip link focused; the secret revealed and hidden again through `#peek`;
+ * one measurement, which is what brings the interference grids into existence;
+ * a cancelled outcome and a surviving one selected, which are two different
+ * renderings of the per-outcome arithmetic; Even-Mansour run to a full break
+ * with its recovered-key panel and both run buttons disabled; Reset; a fresh
+ * secret; n=4 with several candidate periods still standing; CBC-MAC forged at
+ * n=6, which is also the width that makes `#eq-list` overflow its cap; the
+ * textbook target, whose verdict must NOT read as an alarm; the control, which
+ * ends in a proof of absence; a partially-collected run; both disclosures opened
+ * through their own summaries; the measured race over 120 attack runs; and each
+ * of the page's button shapes hovered, including the SELECTED segment — the
+ * control that says which mode is on.
+ *
+ * How the spec this replaces faked passing — worth naming, because the mechanism
+ * is the durable part:
+ *
+ *  - it injected `animation:none!important; transition:none!important` through
+ *    `addStyleTag`, which BYPASSES this lab's own reduced-motion handling rather
+ *    than exercising it. `main.ts` branches on
+ *    `matchMedia('(prefers-reduced-motion: reduce)')` to choose its step delay,
+ *    and a stylesheet cannot reach that branch — so the old gate ran the
+ *    ANIMATED code path while reporting that it had suppressed motion;
+ *  - it stripped `hidden` from every element, added `active is-active open` to
+ *    each, and set `open` on both `<details>`, assembling a document no visitor
+ *    can reach: the recovered-key panel rendered against a period that had not
+ *    been found, beside a "Peek at the secret" button whose `aria-expanded`
+ *    still read `false`;
+ *  - it drove all four targets, three widths, both grids, a reset and a 120-run
+ *    race — and then scanned ONCE, after `waitForTimeout(400)`, so every state
+ *    it built was overwritten before anything measured it. The state a reader
+ *    sees FIRST was the one state it never looked at;
+ *  - its narrow test drove at 380px, scanned, toggled the theme and scanned
+ *    again WITHOUT RE-DRIVING, so the light-theme scan measured whatever the
+ *    dark drive had left on the page;
+ *  - it asserted on axe's `violations` only. `incomplete` is the only bucket
+ *    `aria-prohibited-attr` and `aria-required-children` ever reach, and this
+ *    page carries the shapes both rules look for;
+ *  - and it had no oracle at all for 1.4.10 reflow, 1.4.11 non-text contrast, or
+ *    composited 1.4.3 contrast — which axe declines to judge wherever a
+ *    `color-mix()` is involved, as it is throughout the shared top bar.
+ *
+ * See `gate.ts` for why nothing is injected, why no panel is force-revealed, why
+ * the lab's defaults are asserted rather than assumed, and why `violations` is
+ * not the whole oracle.
  */
-async function chooseTarget(page: Page, id: string, name: string): Promise<void> {
-  await page.locator(`#seg-target button[data-target="${id}"]`).click();
-  await expect(page.locator('#target-name')).toHaveText(name);
-  await expect(page.locator(`#seg-target button[data-target="${id}"]`)).toHaveAttribute('aria-pressed', 'true');
-}
 
-async function chooseWidth(page: Page, n: number): Promise<void> {
-  await page.locator(`#seg-width button[data-width="${n}"]`).click();
-  await expect(page.locator(`#seg-width button[data-width="${n}"]`)).toHaveAttribute('aria-pressed', 'true');
-  // n−1 isolates a period; the control has none and its rank runs to n, so the
-  // threshold the meter prints is target-shaped.
-  const control = await page
-    .locator('#seg-target button[data-target="no-period"]')
-    .getAttribute('aria-pressed');
-  await expect(page.locator('#rank-value')).toContainText(`/ ${control === 'true' ? n : n - 1} needed`);
-}
-
-async function driveDemos(page: Page): Promise<void> {
-  // Exhibit 1 — Even-Mansour, the flagship break: run it to a verdict so the
-  // key-recovery panel with its ✓/✗ marks is on screen.
-  await chooseTarget(page, 'even-mansour', 'Even-Mansour');
-  await page.locator('#peek').click();
-  await expect(page.locator('#secret-box')).toBeVisible();
-  await page.locator('#run-all').click();
-  await expect(page.locator('#verdict')).toHaveClass(/is-broken/, { timeout: 60_000 });
-  await expect(page.locator('#exploit')).toBeVisible();
-
-  // Exhibit 2 — the interference grids, and the arithmetic for both a cancelled
-  // outcome and a surviving one. Those are two different result renderings.
-  const after = page.locator('#grid-after .amp-cell');
-  await expect(after.first()).toBeVisible();
-  const zeroCell = page.locator('#grid-after .amp-cell.zero').first();
-  if (await zeroCell.count()) {
-    await zeroCell.click();
-    await expect(page.locator('.arith-result.kills')).toBeVisible();
-  }
-  const liveCell = page.locator('#grid-after .amp-cell.pos, #grid-after .amp-cell.neg').first();
-  await liveCell.click();
-  await expect(page.locator('.arith-result.lives')).toBeVisible();
-  await page.locator('#grid-before .amp-cell').first().click();
-
-  // Exhibit 3 — the linear system, at a narrower width so the matrix and the
-  // multi-candidate chip list are both exercised.
-  await chooseWidth(page, 4);
-  await page.locator('#measure').click();
-  await expect(page.locator('#eq-list .eq')).toHaveCount(1);
-  await page.locator('#measure').click();
-  await expect(page.locator('#matrix-wrap .matrix')).toBeVisible();
-
-  // Exhibit 4 — CBC-MAC, the forgery, at the widest setting.
-  await chooseTarget(page, 'cbc-mac', 'CBC-MAC');
-  await chooseWidth(page, 6);
-  await page.locator('#run-all').click();
-  await expect(page.locator('#verdict')).toHaveClass(/is-broken/, { timeout: 60_000 });
-
-  // Exhibit 5 — the textbook target, whose verdict must NOT read as an alarm.
-  await chooseTarget(page, 'textbook', 'Textbook 2-to-1');
-  await page.locator('#run-all').click();
-  await expect(page.locator('#exploit')).toHaveClass(/neutral/, { timeout: 60_000 });
-
-  // Exhibit 6 — the control: no period, the "safe" verdict styling.
-  await chooseTarget(page, 'no-period', 'No period (control)');
-  await chooseWidth(page, 5);
-  await page.locator('#run-all').click();
-  await expect(page.locator('#verdict')).toHaveClass(/is-safe/, { timeout: 60_000 });
-
-  // Reset back to a partially-collected state so the in-progress verdict and
-  // the multi-candidate list are also in the DOM when the scan runs.
-  await page.locator('#reset').click();
-  await page.locator('#measure').click();
-  await expect(page.locator('#verdict')).toHaveClass(/is-working/);
-
-  // Exhibit 7 — the measured race, a real computation over 120 attack runs.
-  // Wait for the caption, not just the third row: the row lands first and the
-  // caption and the re-enabled button land after, so scanning on the row count
-  // alone runs axe against a DOM still being written.
-  await page.locator('#race-run').click();
-  await expect(page.locator('#race-out .race-row')).toHaveCount(3, { timeout: 120_000 });
-  await expect(page.locator('#race-status')).toContainText('Done —', { timeout: 120_000 });
-  await expect(page.locator('#race-run')).toBeEnabled();
-}
-
-async function prepare(page: Page): Promise<void> {
-  await page.addStyleTag({
-    content: `*,*::before,*::after{animation:none!important;transition:none!important}`,
+for (const theme of ['dark', 'light'] as const) {
+  test(`no WCAG A/AA violations in ${theme} theme`, async ({ page }) => {
+    test.setTimeout(1_200_000);
+    const errors = watchPageErrors(page);
+    await boot(page, theme);
+    await driveAllStates(page, theme);
+    expect(errors, errors.join('\n')).toEqual([]);
+    expectBaselineNotStale();
+    reportCollected();
   });
-  await page.evaluate(() => {
-    document.querySelectorAll('details').forEach((d) => ((d as HTMLDetailsElement).open = true));
-    document.querySelectorAll<HTMLElement>('[hidden],[role="tabpanel"]').forEach((el) => {
-      el.removeAttribute('hidden');
-      el.style.display = '';
-      el.classList.add('active', 'is-active', 'open');
-    });
+
+  test(`no WCAG A/AA violations in ${theme} theme at 380px`, async ({ page }) => {
+    test.setTimeout(1_200_000);
+    const errors = watchPageErrors(page);
+    await page.setViewportSize(NARROW);
+    await boot(page, theme);
+    await driveAllStates(page, `${theme} @380px`);
+    expect(errors, errors.join('\n')).toEqual([]);
+    expectBaselineNotStale();
+    reportCollected();
   });
-  await page.waitForTimeout(400);
 }
-
-async function scan(page: Page): Promise<void> {
-  const { violations } = await new AxeBuilder({ page }).withTags(TAGS).analyze();
-  expect(
-    violations.map((v) => ({
-      id: v.id,
-      impact: v.impact,
-      nodes: v.nodes.map((n) => n.target.join(' ')).slice(0, 5),
-    })),
-  ).toEqual([]);
-}
-
-test('no WCAG A/AA violations — dark theme', async ({ page }) => {
-  await page.goto('.');
-  await driveDemos(page);
-  await prepare(page);
-  await scan(page);
-});
-
-test('no WCAG A/AA violations — light theme', async ({ page }) => {
-  await page.goto('.');
-  await page.locator('#cl-theme-toggle').click();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await driveDemos(page);
-  await prepare(page);
-  await scan(page);
-});
-
-test('no WCAG A/AA violations — narrow viewport, both themes', async ({ page }) => {
-  // The layout stacks below 640px and the amplitude grid drops to four columns;
-  // stacked is a different rendering, so it is a different scan.
-  await page.setViewportSize({ width: 380, height: 900 });
-  await page.goto('.');
-  await driveDemos(page);
-  await prepare(page);
-  await scan(page);
-  await page.locator('#cl-theme-toggle').click();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await prepare(page);
-  await scan(page);
-});

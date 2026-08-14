@@ -871,7 +871,14 @@ body {
   justify-content: center;
   gap: 1px;
   min-height: 2.9rem;
-  border: 1px solid var(--border);
+  /* WCAG 1.4.11. Every cell in both grids is a real <button>, so its edge is a
+     control boundary and needs 3:1 against the panel behind it. This was
+     `--border`, the SURFACE-divider token used for section rules and table
+     lines: 1.37:1 dark and 1.42:1 light. `--border-strong` is the palette's
+     control-boundary token and measures 3.61:1 dark / 3.84:1 light there.
+     These cells do not exist until a measurement has been run, which is why
+     the hand pass that fixed the five button boundaries never saw them. */
+  border: 1px solid var(--border-strong);
   border-radius: 7px;
   background-color: var(--panel-2);
   color: var(--text-dim);
@@ -898,7 +905,13 @@ body {
 }
 .amp-cell.pos {
   background-color: var(--accent-soft);
-  border-color: var(--accent-line);
+  /* WCAG 1.4.11. `--accent-line` is a decorative accent rule (a divider colour),
+     1.68:1 dark and 2.08:1 light against the panel — the same mistake
+     `.btn-secondary` had. The fix keeps the hue, because the violet/amber pair
+     is how a positive cell is told from a negative one at a glance: this is the
+     accent ink the palette defines for use ON a panel, and it is already this
+     cell's text colour. 9.01:1 dark, 8.79:1 light. */
+  border-color: var(--accent-text);
   color: var(--accent-text);
 }
 .amp-cell.neg {
@@ -908,7 +921,9 @@ body {
 }
 .amp-cell.zero {
   background-color: var(--zero);
-  border-color: var(--border);
+  /* No `border-color` here: the base `.amp-cell` rule now paints the control
+     boundary with `--border-strong`, and the `--border` this used to re-declare
+     was the surface-divider token that put it at 1.37:1. */
   color: var(--text-muted);
   transform: scale(0.82);
 }

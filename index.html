@@ -387,7 +387,20 @@
         <div class="sys-grid">
           <div>
             <h3 class="panel-h">Measurements, in order</h3>
-            <div class="eq-list" id="eq-list" role="log" aria-live="polite" aria-label="Measured equations">
+            <!-- tabindex="0" because this region scrolls (max-height 21rem,
+                 overflow-y auto) and holds no focusable child, so without it
+                 there is no keyboard route to its content once enough
+                 equations accumulate — WCAG 2.1.1. It does not overflow at the
+                 shipped default, which is why this was invisible until the gate
+                 drove a full run at n = 6. -->
+            <div
+              class="eq-list"
+              id="eq-list"
+              role="log"
+              aria-live="polite"
+              aria-label="Measured equations"
+              tabindex="0"
+            >
               <p class="panel-note">No measurements yet.</p>
             </div>
           </div>
@@ -525,7 +538,7 @@
         </p>
         <ul class="breaks" role="list">
           <li role="listitem" class="break-card break-live">
-            <span class="break-tag" aria-label="Implemented in this demo"><span aria-hidden="true">▶</span> live above</span>
+            <span class="break-tag"><span class="sr-only">Implemented in this demo: </span><span aria-hidden="true">▶</span> live above</span>
             <h3>Even-Mansour</h3>
             <p>
               <code>E(x) = P(x ⊕ k₁) ⊕ k₂</code>. Set <code>f(x) = E(x) ⊕ P(x)</code>; its period is
@@ -534,7 +547,7 @@
             <p class="break-cite">Kuwakado &amp; Morii, ISITA 2012</p>
           </li>
           <li role="listitem" class="break-card break-live">
-            <span class="break-tag" aria-label="Implemented in this demo"><span aria-hidden="true">▶</span> live above</span>
+            <span class="break-tag"><span class="sr-only">Implemented in this demo: </span><span aria-hidden="true">▶</span> live above</span>
             <h3>CBC-MAC and its relatives</h3>
             <p>
               <code>f(b, m) = MAC(α_b ‖ m)</code> has period <code>(1, Eₖ(α₀) ⊕ Eₖ(α₁))</code>. Recovering it is an
@@ -543,7 +556,7 @@
             <p class="break-cite">Kaplan, Leurent, Leverrier &amp; Naya-Plasencia, CRYPTO 2016</p>
           </li>
           <li role="listitem" class="break-card">
-            <span class="break-tag break-tag-off" aria-label="Described, not implemented"><span aria-hidden="true">◇</span> described only</span>
+            <span class="break-tag break-tag-off"><span class="sr-only">Described, not implemented: </span><span aria-hidden="true">◇</span> described only</span>
             <h3>3-round Feistel</h3>
             <p>
               Fix two distinct left inputs <code>α₀, α₁</code> and define <code>f(b, x)</code> from the left half of
@@ -553,7 +566,7 @@
             <p class="break-cite">Kuwakado &amp; Morii, ISIT 2010</p>
           </li>
           <li role="listitem" class="break-card">
-            <span class="break-tag break-tag-off" aria-label="Described, not implemented"><span aria-hidden="true">◇</span> described only</span>
+            <span class="break-tag break-tag-off"><span class="sr-only">Described, not implemented: </span><span aria-hidden="true">◇</span> described only</span>
             <h3>Slide attacks</h3>
             <p>
               A cipher with identical rounds and a self-similar key schedule satisfies a slide relation. Written as a
