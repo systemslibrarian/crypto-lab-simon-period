@@ -79,7 +79,7 @@ The same spec gates the counters, the failure paths and the page's state discipl
 
 ## Build & Verify
 
-**78 unit tests** (Vitest, colocated in `src/`), including these known-answer tests:
+**79 unit tests** (Vitest, colocated in `src/`), including these known-answer tests:
 
 | KAT | Source | File |
 | --- | --- | --- |
