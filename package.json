@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run test:workflow-controls && tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:a11y": "playwright test e2e/a11y.spec.ts",
-    "test:claims": "playwright test e2e/claims.spec.ts"
+    "test:claims": "playwright test e2e/claims.spec.ts",
+    "test:workflow-controls": "node --test tests/workflow-controls.node.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
