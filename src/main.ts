@@ -500,10 +500,15 @@ function buildGrid(
     cell.appendChild(glyph);
     cell.appendChild(label);
 
+    // The cell renders its sign glyph and its bits with nothing between them,
+    // so the name opens with exactly that pair: axe 4.14 compares the
+    // accessible name against what a SIGHTED user sees
+    // (label-content-name-mismatch, WCAG 2.5.3 Label in Name).
+    const face = `${glyph.textContent ?? ''}${bits(x, state.n)}`;
     const name =
       opts.kind === 'before'
-        ? `input ${bits(x, state.n)}: ${cls === 'zero' ? 'not in the superposition' : 'in the superposition'}`
-        : `outcome ${bits(x, state.n)}: amplitude ${sign === '0' ? 'cancelled to zero — impossible' : sign === '+' ? 'positive' : 'negative'}${
+        ? `${face}: input ${bits(x, state.n)}, ${cls === 'zero' ? 'not in the superposition' : 'in the superposition'}`
+        : `${face}: outcome ${bits(x, state.n)}, amplitude ${sign === '0' ? 'cancelled to zero — impossible' : sign === '+' ? 'positive' : 'negative'}${
             opts.measured === x ? ', measured this round' : ''
           }`;
     cell.setAttribute('aria-label', name);
