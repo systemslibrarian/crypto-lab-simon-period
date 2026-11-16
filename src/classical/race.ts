@@ -36,9 +36,17 @@ export interface ClassicalRun {
  * output, and stop when one repeats. A repeat f(x) = f(x') gives the candidate
  * x ⊕ x', which is then verified against the function.
  *
- * This is a birthday search over 2^(n-1) preimage classes, so it costs ~2^(n/2)
- * queries — and no classical algorithm does better against a black box, which
- * is the lower bound Simon's paper proves.
+ * This is a birthday search over the 2^(n-1) preimage classes, so it costs on
+ * the scale of 2^(n/2) queries — and no classical algorithm does better against
+ * a black box, which is the lower bound Simon's paper proves.
+ *
+ * The expected count is not 2^(n/2) itself. Inputs are sampled WITHOUT
+ * replacement, so two draws collide only when they are partners, probability
+ * 1/(2^n - 1) rather than 1/2^(n-1), and the expected number of distinct
+ * queries before some pair {x, x ⊕ s} is complete is √(π/2 · 2^n) ≈
+ * 1.25 · 2^(n/2) — 5.0, 7.1 and 10.0 at n = 4, 5, 6 against the exactly 2-to-1
+ * oracle. `queries` is that count: distinct inputs read until a candidate
+ * verified as the period.
  */
 export function classicalPeriodSearch(table: Uint32Array, n: number, rng: () => number): ClassicalRun {
   const size = 1 << n;
@@ -151,7 +159,10 @@ export interface RaceRow {
   quantumMean: number;
   classicalMean: number;
   trials: number;
-  /** 2^(n/2) — the textbook birthday bound, for reference. */
+  /**
+   * 2^(n/2) — the birthday SCALE, for reference. The expected number of
+   * distinct queries is √(π/2 · 2^n) ≈ 1.25 × this.
+   */
   birthdayBound: number;
 }
 

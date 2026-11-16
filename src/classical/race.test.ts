@@ -52,13 +52,22 @@ describe('the classical birthday search', () => {
     expect(run.queries).toBe(1 << n);
   });
 
-  it('costs about 2^(n/2) queries — the birthday bound', () => {
-    // The bound is the point of the whole comparison, so it is measured rather
-    // than quoted. Expected first collision among 2^(n-1) classes is
-    // √(π/2 · 2^(n-1)); the assertion is loose enough to be stable but tight
-    // enough to fail if the search stopped being a birthday search.
-    const rng = makeRng(99);
-    for (const n of [6]) {
+  it('costs about √(π/2 · 2ⁿ) distinct queries — the birthday scale', () => {
+    // What this measures is the number of DISTINCT inputs read until a
+    // candidate verified as the period. Inputs are sampled without replacement
+    // (race.ts), so two draws collide only when they are partners — odds
+    // 1/(2^n − 1), not 1/2^(n-1) — and the expectation is √(π/2 · 2^n), not
+    // √(π/2 · 2^(n-1)). Computed exactly, the mean number of draws until some
+    // pair {x, x ⊕ s} is complete is 5.09, 7.14 and 10.07 at n = 4, 5, 6;
+    // √(π/2 · 2^n) gives 5.01, 7.09 and 10.03, while √(π/2 · 2^(n-1)) gives
+    // 3.54, 5.01 and 7.09 — low by a factor of √2.
+    //
+    // The window is ±15%, which the old ×0.6/×1.8 one was far too loose to
+    // notice: at n = 6 it admitted everything from 4.3 to 12.8, so both
+    // formulae and 2^(n/2) = 8.0 passed it. The measured means below are
+    // 5.12, 7.32 and 10.00 — all within 4% of the formula.
+    for (const n of [4, 5, 6]) {
+      const rng = makeRng(99);
       let total = 0;
       const trials = 400;
       for (let t = 0; t < trials; t++) {
@@ -66,9 +75,9 @@ describe('the classical birthday search', () => {
         total += classicalPeriodSearch(textbookOracle(n, s), n, rng).queries;
       }
       const mean = total / trials;
-      const expected = Math.sqrt((Math.PI / 2) * Math.pow(2, n - 1));
-      expect(mean).toBeGreaterThan(expected * 0.6);
-      expect(mean).toBeLessThan(expected * 1.8);
+      const expected = Math.sqrt((Math.PI / 2) * Math.pow(2, n));
+      expect(mean, `n=${n}: mean ${mean.toFixed(2)} vs √(π/2·2ⁿ) = ${expected.toFixed(2)}`).toBeGreaterThan(expected * 0.85);
+      expect(mean, `n=${n}: mean ${mean.toFixed(2)} vs √(π/2·2ⁿ) = ${expected.toFixed(2)}`).toBeLessThan(expected * 1.15);
     }
   });
 });

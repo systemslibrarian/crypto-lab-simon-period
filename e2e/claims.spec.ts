@@ -643,12 +643,21 @@ test('the race is measured, and every headline ratio is the two numbers beside i
     const ratio = Number(capture(row, /classical \/ quantum = ([\d.]+)×/, `ratio for n=${n}`));
     const quantum = Number(capture(row, /Simon \(quantum\) ([\d.]+)/, `quantum mean for n=${n}`));
     const classical = Number(capture(row, /birthday \(classical\) ([\d.]+)/, `classical mean for n=${n}`));
-    const birthday = Number(capture(row, /birthday bound 2\^\(n\/2\) ≈ ([\d.]+)/, `bound for n=${n}`));
+    const birthday = Number(capture(row, /birthday scale 2\^\(n\/2\) ≈ ([\d.]+)/, `scale for n=${n}`));
+    const expected = Number(
+      capture(row, /expected distinct queries √\(π\/2·2\^n\) ≈ ([\d.]+)/, `expectation for n=${n}`),
+    );
 
     // The headline ratio is the two measured means, not a stated constant.
     expect(ratio, `ratio for n=${n}`).toBeCloseTo(classical / quantum, 1);
-    // The cited bound is sqrt(2^n), computed rather than tabulated.
-    expect(birthday, `bound for n=${n}`).toBeCloseTo(Math.sqrt(1 << n), 1);
+    // The cited scale is sqrt(2^n), computed rather than tabulated, and the
+    // expected count beside it is sqrt(pi/2 * 2^n) -- larger by 1.25, which is
+    // what a search sampling without replacement actually costs.
+    expect(birthday, `scale for n=${n}`).toBeCloseTo(Math.sqrt(1 << n), 1);
+    expect(expected, `expectation for n=${n}`).toBeCloseTo(
+      Math.sqrt((Math.PI / 2) * (1 << n)),
+      1,
+    );
     expect(quantum, `quantum mean for n=${n}`).toBeGreaterThan(0);
     expect(row).toContain('trials');
     expect(row).toContain('Mean oracle queries.');
@@ -789,9 +798,12 @@ test('no race row calls itself a birthday search unless a collision actually dec
     const row = flat(raw);
     const n = [4, 5, 6][i]!;
     // The row may explain that no birthday bound applies; what it must not do
-    // is quote one as this comparison's reference.
-    expect(row, `n=${n}: no birthday bound is quoted where no collision was found`).not.toContain(
-      'birthday bound 2^(n/2)',
+    // is quote the scale or the expected count as this comparison's reference.
+    expect(row, `n=${n}: no birthday scale is quoted where no collision was found`).not.toContain(
+      'birthday scale 2^(n/2)',
+    );
+    expect(row, `n=${n}: no expected query count is quoted either`).not.toContain(
+      'expected distinct queries',
     );
     expect(row, `n=${n}: the bar is not labelled birthday`).not.toContain('birthday (classical)');
     expect(row, `n=${n}: the bar names what was actually run`).toContain('exhaustive (classical)');
@@ -815,7 +827,8 @@ test('no race row calls itself a birthday search unless a collision actually dec
     const row = flat(raw);
     const n = [4, 5, 6][i]!;
     expect(row, `n=${n}: a real birthday search keeps its label`).toContain('birthday (classical)');
-    expect(row).toContain('birthday bound 2^(n/2)');
+    expect(row).toContain('birthday scale 2^(n/2)');
+    expect(row).toContain('expected distinct queries √(π/2·2^n)');
     expect(row).not.toContain('exhaustive (classical)');
     // The claim behind the label: a collision decided at least one trial, and
     // the count printed is a real count.

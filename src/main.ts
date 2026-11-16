@@ -798,6 +798,13 @@ function renderRaceRow(
   // A birthday bound describes the cost of finding a collision. If no trial
   // found one, quoting the bound and calling the bar "birthday" both describe an
   // algorithm that did not run — the classical side proved injectivity instead.
+  //
+  // 2^(n/2) is the SCALE, not the expected count. Because the search samples
+  // without replacement, two draws collide only when they are partners — odds
+  // 1/(2^n − 1) — so the expected number of distinct queries before a pair is
+  // complete is √(π/2·2^n) ≈ 1.25·2^(n/2): 5.0, 7.1, 10.0 at n = 4, 5, 6. The
+  // row prints both, because a bound of 8.0 printed beside a measured 10.0
+  // reads as a failed prediction rather than as the right order of growth.
   const isBirthdaySearch = classicalFoundPeriod > 0;
   const row = make('div', 'race-row');
   const head = make('div', 'race-row-head');
@@ -807,7 +814,7 @@ function renderRaceRow(
       'span',
       'race-ratio',
       isBirthdaySearch
-        ? `classical / quantum = ${(classical / quantum).toFixed(2)}× · ${trials} trials · birthday bound 2^(n/2) ≈ ${Math.pow(2, n / 2).toFixed(1)}`
+        ? `classical / quantum = ${(classical / quantum).toFixed(2)}× · ${trials} trials · birthday scale 2^(n/2) ≈ ${Math.pow(2, n / 2).toFixed(1)} · expected distinct queries √(π/2·2^n) ≈ ${Math.sqrt((Math.PI / 2) * (1 << n)).toFixed(1)}`
         : `classical / quantum = ${(classical / quantum).toFixed(2)}× · ${trials} trials · no collision found in any trial, so no birthday bound applies — the reference here is the whole domain, 2^${n} = ${1 << n}`,
     ),
   );
