@@ -13,6 +13,13 @@ import {
 } from './targets';
 
 describe('every target is a well-formed oracle', () => {
+  it('states the complete Simon promise, including self-pairs', async () => {
+    const target = await makeTextbookTarget(5);
+    expect(target.tagline).toBe(
+      'Simon’s promise, exactly: f(x) = f(y) ⟺ y = x or y = x ⊕ s.',
+    );
+  });
+
   it('has a table covering the domain with values inside the output register', async () => {
     for (const id of TARGET_IDS) {
       for (let n = 4; n <= 6; n++) {

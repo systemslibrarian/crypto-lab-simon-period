@@ -100,7 +100,7 @@ export async function makeTextbookTarget(n: number): Promise<Target> {
   return {
     id: 'textbook',
     name: 'Textbook 2-to-1',
-    tagline: 'Simon’s promise, exactly: f(x) = f(y) ⟺ y = x ⊕ s.',
+    tagline: 'Simon’s promise, exactly: f(x) = f(y) ⟺ y = x or y = x ⊕ s.',
     source: 'Simon 1994 — the original problem statement',
     n,
     m: n,
