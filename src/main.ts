@@ -534,7 +534,8 @@ function renderInterference(): void {
   }
   el('before-note').textContent =
     `Output register read as ${bits(round.observedOutput, state.target!.m)}. ` +
-    `${plural(round.preimage.length, 'input')} share that value, so the machine now holds all of them at once.`;
+    `${plural(round.preimage.length, 'input')} ${round.preimage.length === 1 ? 'shares' : 'share'} that value, ` +
+    'so the machine now holds all of them at once.';
   buildGrid(before, round.amplitudesBeforeFinalH, { kind: 'before' });
   buildGrid(after, round.amplitudesAfterFinalH, { kind: 'after', measured: round.measured });
 

@@ -319,12 +319,12 @@ test('the control target is described as injective, not as a period the panels c
       await expect(page.locator('#measure')).toBeEnabled();
     }
     await page.locator('#measure').click();
-    await expect(page.locator('#before-note')).toContainText('share that value');
+    await expect(page.locator('#before-note')).toContainText('1 input shares that value');
     rounds++;
 
     // The state: one input in the superposition, nothing cancelled.
     const share = Number(
-      capture(await textOf(page.locator('#before-note')), /(\d+) inputs? share that value/, 'preimage size'),
+      capture(await textOf(page.locator('#before-note')), /(\d+) inputs? shares? that value/, 'preimage size'),
     );
     expect(share, 'an injective f has exactly one preimage per output').toBe(1);
     expect(await page.locator('#grid-before .amp-cell:not(.empty)').count()).toBe(1);
@@ -1119,7 +1119,7 @@ test('the interference grids account for every outcome, and the notes count what
   // Before the final Hadamard: the preimage size claimed is the number of cells
   // actually painted as in-superposition.
   const share = Number(
-    capture(await textOf(page.locator('#before-note')), /(\d+) inputs? share that value/, 'preimage size'),
+    capture(await textOf(page.locator('#before-note')), /(\d+) inputs? shares? that value/, 'preimage size'),
   );
   expect(await page.locator('#grid-before .amp-cell:not(.empty)').count(), 'live cells = the preimage claimed').toBe(
     share,
